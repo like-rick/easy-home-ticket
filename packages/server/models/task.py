@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, time, datetime
+from datetime import date, time, datetime, UTC
 from sqlalchemy import String, Date, Time, Integer, Text, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 from . import Base
@@ -19,5 +19,5 @@ class Task(Base):
     strategies: Mapped[str] = mapped_column(Text, default='["direct","split","longer","cross"]')
     passengers: Mapped[str] = mapped_column(Text, default="[]")
     status: Mapped[str] = mapped_column(String(16), default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))

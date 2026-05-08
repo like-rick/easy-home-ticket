@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from . import Base
@@ -15,5 +15,5 @@ class Solution(Base):
     extra_fee: Mapped[float] = mapped_column(Float, default=0.0)
     priority: Mapped[int] = mapped_column(Integer, default=1)
     ticket_status: Mapped[str] = mapped_column(String(16), default="pending")
-    locked_segment_index: Mapped[int] = mapped_column(Integer, default=-1)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    locked_segment_index: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
