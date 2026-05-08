@@ -34,6 +34,9 @@
     ],
     "host_permissions": [
       "https://kyfw.12306.cn/*"
-    ]
+    ],
+    "chrome_url_overrides": {
+      "newtab": "dashboard.html"
+    }
   }
 }
