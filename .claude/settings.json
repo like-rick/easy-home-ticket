@@ -1,0 +1,34 @@
+{
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "Agent(*)",
+      "TodoWrite(*)",
+      "TaskOutput(*)",
+      "TaskStop(*)",
+      "Monitor(*)",
+      "CronCreate(*)",
+      "CronDelete(*)",
+      "CronList(*)",
+      "NotebookEdit(*)",
+      "Skill(*)",
+      "AskUserQuestion(*)",
+      "PushNotification(*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)"
+    ]
+  },
+  "defaultMode": "bypassPermissions"
+}
