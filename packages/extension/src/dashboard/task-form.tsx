@@ -49,95 +49,111 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="plasmo-fixed plasmo-inset-0 plasmo-bg-black/50 plasmo-flex plasmo-items-center plasmo-justify-center plasmo-z-50">
-      <div className="plasmo-bg-white plasmo-rounded-lg plasmo-p-6 plasmo-w-[480px] plasmo-max-h-[80vh] plasmo-overflow-auto">
-        <h2 className="plasmo-text-lg plasmo-font-bold plasmo-mb-4">新建监控任务</h2>
+    <div className="plasmo-fixed plasmo-inset-0 plasmo-flex plasmo-items-center plasmo-justify-center plasmo-z-50" style={{ backgroundColor: 'rgba(0,0,0,0.53)' }}>
+      <div className="plasmo-bg-canvas plasmo-rounded-xl plasmo-p-6 plasmo-w-[480px] plasmo-max-h-[80vh] plasmo-overflow-auto plasmo-border plasmo-border-border">
+        <h2 className="plasmo-text-lg plasmo-font-semibold plasmo-text-white plasmo-mb-4">新建监控任务</h2>
 
         <div className="plasmo-grid plasmo-grid-cols-2 plasmo-gap-3">
           <div>
-            <label className="plasmo-text-xs plasmo-text-gray-500">出发站</label>
+            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">出发站</label>
             <select value={from} onChange={e => setFrom(e.target.value)}
-              className="plasmo-w-full plasmo-border plasmo-rounded plasmo-px-2 plasmo-py-1 plasmo-text-sm">
+              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none">
               <option value="">选择</option>
               {STATIONS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label className="plasmo-text-xs plasmo-text-gray-500">目的站</label>
+            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">目的站</label>
             <select value={to} onChange={e => setTo(e.target.value)}
-              className="plasmo-w-full plasmo-border plasmo-rounded plasmo-px-2 plasmo-py-1 plasmo-text-sm">
+              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none">
               <option value="">选择</option>
               {STATIONS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label className="plasmo-text-xs plasmo-text-gray-500">日期</label>
+            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">日期</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              className="plasmo-w-full plasmo-border plasmo-rounded plasmo-px-2 plasmo-py-1 plasmo-text-sm" />
+              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none" />
           </div>
           <div>
-            <label className="plasmo-text-xs plasmo-text-gray-500">溢价上限(元)</label>
+            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">溢价上限(元)</label>
             <input type="number" value={maxExtra} onChange={e => setMaxExtra(+e.target.value)}
-              className="plasmo-w-full plasmo-border plasmo-rounded plasmo-px-2 plasmo-py-1 plasmo-text-sm" />
+              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none" />
           </div>
           <div>
-            <label className="plasmo-text-xs plasmo-text-gray-500">时段开始</label>
+            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">时段开始</label>
             <input type="time" value={timeStart} onChange={e => setTimeStart(e.target.value)}
-              className="plasmo-w-full plasmo-border plasmo-rounded plasmo-px-2 plasmo-py-1 plasmo-text-sm" />
+              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none" />
           </div>
           <div>
-            <label className="plasmo-text-xs plasmo-text-gray-500">时段结束</label>
+            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">时段结束</label>
             <input type="time" value={timeEnd} onChange={e => setTimeEnd(e.target.value)}
-              className="plasmo-w-full plasmo-border plasmo-rounded plasmo-px-2 plasmo-py-1 plasmo-text-sm" />
+              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none" />
           </div>
         </div>
 
-        <div className="plasmo-mt-3">
-          <label className="plasmo-text-xs plasmo-text-gray-500">席别</label>
+        <div className="plasmo-mt-4">
+          <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-2 plasmo-block">席别</label>
           <div className="plasmo-flex plasmo-flex-wrap plasmo-gap-2">
             {SEAT_TYPES.map(s => (
               <button key={s} onClick={() => setSeatTypes(toggleArr(seatTypes, s))}
-                className={`plasmo-px-2 plasmo-py-0.5 plasmo-rounded plasmo-text-xs ${seatTypes.includes(s) ? 'plasmo-bg-blue-500 plasmo-text-white' : 'plasmo-bg-gray-100'}`}>
+                className="plasmo-px-3 plasmo-py-1 plasmo-rounded-md plasmo-text-sm plasmo-border plasmo-transition-colors"
+                style={{
+                  backgroundColor: seatTypes.includes(s) ? 'rgba(62,207,142,0.15)' : '#202020',
+                  borderColor: seatTypes.includes(s) ? 'rgba(62,207,142,0.27)' : '#333',
+                  color: seatTypes.includes(s) ? '#3ecf8e' : '#9a9a9a',
+                }}>
                 {s}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="plasmo-mt-3">
-          <label className="plasmo-text-xs plasmo-text-gray-500">策略</label>
+        <div className="plasmo-mt-4">
+          <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-2 plasmo-block">策略</label>
           <div className="plasmo-flex plasmo-flex-wrap plasmo-gap-2">
             {STRATEGIES.map(s => (
               <button key={s.key} onClick={() => setStrategies(toggleArr(strategies, s.key))}
-                className={`plasmo-px-2 plasmo-py-0.5 plasmo-rounded plasmo-text-xs ${strategies.includes(s.key) ? 'plasmo-bg-green-500 plasmo-text-white' : 'plasmo-bg-gray-100'}`}>
+                className="plasmo-px-3 plasmo-py-1 plasmo-rounded-md plasmo-text-sm plasmo-border plasmo-transition-colors"
+                style={{
+                  backgroundColor: strategies.includes(s.key) ? 'rgba(62,207,142,0.15)' : '#202020',
+                  borderColor: strategies.includes(s.key) ? 'rgba(62,207,142,0.27)' : '#333',
+                  color: strategies.includes(s.key) ? '#3ecf8e' : '#9a9a9a',
+                }}>
                 {s.label}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="plasmo-mt-3">
-          <label className="plasmo-text-xs plasmo-text-gray-500">固定车次 (逗号分隔，可选)</label>
+        <div className="plasmo-mt-4">
+          <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">固定车次 (逗号分隔，可选)</label>
           <input type="text" value={trainNos} onChange={e => setTrainNos(e.target.value)} placeholder="G123,G321"
-            className="plasmo-w-full plasmo-border plasmo-rounded plasmo-px-2 plasmo-py-1 plasmo-text-sm" />
+            className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white placeholder:plasmo-text-[#707070] focus:plasmo-border-primary plasmo-outline-none" />
         </div>
 
-        <div className="plasmo-mt-3 plasmo-grid plasmo-grid-cols-2 plasmo-gap-2">
+        <div className="plasmo-mt-4 plasmo-grid plasmo-grid-cols-2 plasmo-gap-3">
           <div>
-            <label className="plasmo-text-xs plasmo-text-gray-500">乘车人</label>
+            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">乘车人</label>
             <input type="text" value={passengerName} onChange={e => setPassengerName(e.target.value)}
-              className="plasmo-w-full plasmo-border plasmo-rounded plasmo-px-2 plasmo-py-1 plasmo-text-sm" />
+              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none" />
           </div>
           <div>
-            <label className="plasmo-text-xs plasmo-text-gray-500">身份证号</label>
+            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">身份证号</label>
             <input type="text" value={passengerId} onChange={e => setPassengerId(e.target.value)}
-              className="plasmo-w-full plasmo-border plasmo-rounded plasmo-px-2 plasmo-py-1 plasmo-text-sm" />
+              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none" />
           </div>
         </div>
 
         <div className="plasmo-flex plasmo-gap-3 plasmo-mt-6 plasmo-justify-end">
-          <button onClick={onClose} className="plasmo-px-4 plasmo-py-1.5 plasmo-bg-gray-100 plasmo-rounded plasmo-text-sm">取消</button>
-          <button onClick={handleSubmit} className="plasmo-px-4 plasmo-py-1.5 plasmo-bg-blue-500 plasmo-text-white plasmo-rounded plasmo-text-sm">保存并开始</button>
+          <button onClick={onClose}
+            className="plasmo-px-5 plasmo-py-2 plasmo-bg-transparent plasmo-border plasmo-border-border plasmo-text-text-muted plasmo-rounded-md plasmo-text-sm plasmo-font-medium">
+            取消
+          </button>
+          <button onClick={handleSubmit}
+            className="plasmo-px-5 plasmo-py-2 plasmo-bg-primary plasmo-text-black plasmo-rounded-md plasmo-text-sm plasmo-font-medium">
+            保存并开始
+          </button>
         </div>
       </div>
     </div>
