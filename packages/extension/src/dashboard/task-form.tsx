@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import type { TaskConfig } from '../lib/types'
 import { createTask } from '../lib/api'
 import { getSendFn } from '../background/ws-client'
+import { routeMessage } from '../background/state'
 
 const STATIONS = ['上海', '上海虹桥', '北京', '北京南', '武汉', '广州南', '深圳北', '杭州东', '南京南', '成都东', '西安北']
 const SEAT_TYPES = ['二等座', '一等座', '商务座', '硬卧', '软卧', '硬座']
@@ -44,7 +45,9 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
       strategies,
       passengers: passengerName ? [{ id: passengerId || 'p1', name: passengerName, idType: '身份证', idNumber: passengerId }] : [],
     }
+    const taskId = 'local-' + Date.now()
     createTask(config, send)
+    routeMessage({ type: 'TASK_CREATED', ...config, id: taskId } as any)
     onClose()
   }
 

@@ -3,13 +3,23 @@ import { TaskList } from '../dashboard/task-list'
 import { SolutionBoard } from '../dashboard/solution-board'
 import { LogStream } from '../dashboard/log-stream'
 import { TaskForm } from '../dashboard/task-form'
-import type { WsMessage, SolutionData } from '../lib/types'
+import type { WsMessage, SolutionData, TaskConfig } from '../lib/types'
 import { subscribe } from '../background/state'
 
 type Panel = 'tasks' | 'board' | 'log'
 
+interface TaskItem {
+  id: string
+  name: string
+  fromStation: string
+  toStation: string
+  travelDate: string
+  status: string
+}
+
 export default function Dashboard() {
   const [wsConnected, setWsConnected] = useState(false)
+  const [tasks, setTasks] = useState<TaskItem[]>([])
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [solutions, setSolutions] = useState<SolutionData[]>([])
   const [logs, setLogs] = useState<Array<{ time: string; event: string; detail: string }>>([])
@@ -17,11 +27,26 @@ export default function Dashboard() {
   const [activePanel, setActivePanel] = useState<Panel>('tasks')
 
   useEffect(() => {
-    const unsub1 = subscribe('SOLUTION_UPDATE', (data) => {
+    const unsub1 = subscribe('TASK_SYNCED', (data) => {
+      const msg = data as WsMessage & { taskId: string }
+      setTasks(prev => prev.map(t => t.id === msg.taskId ? { ...t, status: 'active' } : t))
+    })
+    const unsub2 = subscribe('TASK_CREATED', (data) => {
+      const cfg = data as TaskConfig & { id: string }
+      setTasks(prev => [...prev, {
+        id: cfg.id,
+        name: cfg.name,
+        fromStation: cfg.fromStation,
+        toStation: cfg.toStation,
+        travelDate: cfg.travelDate,
+        status: 'pending',
+      }])
+    })
+    const unsub3 = subscribe('SOLUTION_UPDATE', (data) => {
       const msg = data as WsMessage & { solutions?: SolutionData[] }
       if (msg.solutions) setSolutions(msg.solutions)
     })
-    const unsub2 = subscribe('SCAN_LOG', (data) => {
+    const unsub4 = subscribe('SCAN_LOG', (data) => {
       const msg = data as WsMessage & { event: string; detail: string }
       setLogs(prev => [...prev.slice(-200), {
         time: new Date().toLocaleTimeString(),
@@ -32,7 +57,7 @@ export default function Dashboard() {
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg.type === 'WS_STATUS') setWsConnected(msg.connected)
     })
-    return () => { unsub1(); unsub2() }
+    return () => { unsub1(); unsub2(); unsub3(); unsub4() }
   }, [])
 
   const handleSelectTask = useCallback((taskId: string) => {
@@ -43,7 +68,10 @@ export default function Dashboard() {
   return (
     <div className="plasmo-h-screen plasmo-flex plasmo-flex-col plasmo-bg-canvas-soft">
       <header className="plasmo-flex plasmo-items-center plasmo-justify-between plasmo-px-6 plasmo-py-3 plasmo-bg-canvas plasmo-border-b plasmo-border-border">
-        <h1 className="plasmo-text-base plasmo-font-semibold plasmo-tracking-tight">EasyHome Ticket</h1>
+        <div className="plasmo-flex plasmo-items-center plasmo-gap-2">
+          <h1 className="plasmo-text-base plasmo-font-semibold plasmo-tracking-tight">EasyHome Ticket</h1>
+          <span className="plasmo-text-xs plasmo-px-1.5 plasmo-py-px plasmo-rounded-full plasmo-bg-primary/20 plasmo-text-primary plasmo-border plasmo-border-primary/40">v0.1</span>
+        </div>
         <div className="plasmo-flex plasmo-items-center plasmo-gap-2 plasmo-text-xs">
           <span
             className="plasmo-inline-block plasmo-w-1.5 plasmo-h-1.5 plasmo-rounded-full"
@@ -72,7 +100,7 @@ export default function Dashboard() {
         </button>
       </nav>
       <main className="plasmo-flex-1 plasmo-overflow-auto plasmo-p-6">
-        {activePanel === 'tasks' && <TaskList onSelect={handleSelectTask} selectedId={selectedTaskId} />}
+        {activePanel === 'tasks' && <TaskList tasks={tasks} onSelect={handleSelectTask} selectedId={selectedTaskId} />}
         {activePanel === 'board' && <SolutionBoard solutions={solutions} />}
         {activePanel === 'log' && <LogStream logs={logs} />}
       </main>
