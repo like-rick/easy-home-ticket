@@ -1,6 +1,5 @@
 import random
 import httpx
-from .station import station_mapper
 from config import USER_AGENTS
 
 BASE_URL = "https://kyfw.12306.cn"

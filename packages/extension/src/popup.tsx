@@ -3,7 +3,7 @@ import "~style.css"
 
 function IndexPopup() {
   const openDashboard = () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') })
+    chrome.tabs.create({ url: chrome.runtime.getURL('newtab.html') })
   }
 
   return (
