@@ -34,9 +34,6 @@
     ],
     "host_permissions": [
       "https://kyfw.12306.cn/*"
-    ],
-    "background": {
-      "service_worker": "background.js"
-    }
+    ]
   }
 }
