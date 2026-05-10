@@ -328,8 +328,7 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
   const [seatTypes, setSeatTypes] = useState<string[]>(['二等座'])
   const [trainNos, setTrainNos] = useState('')
   const [strategies, setStrategies] = useState<string[]>(['direct', 'split', 'longer', 'cross'])
-  const [passengerName, setPassengerName] = useState('')
-  const [passengerId, setPassengerId] = useState('')
+  const [passengers, setPassengers] = useState<Passenger[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const setFieldError = (field: string, msg: string) => {
@@ -364,6 +363,7 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
     if (!maxExtra || maxExtra <= 0) newErrors.maxExtra = '请填写最多加价金额'
     if (seatTypes.length === 0) newErrors.seatTypes = '请至少选择一种座位类型'
     if (strategies.length === 0) newErrors.strategies = '请至少选择一种监控策略'
+    if (passengers.length === 0) newErrors.passengers = '请至少选择一位乘车人'
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -383,7 +383,7 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
       seatTypes,
       trainNos: trainNos ? trainNos.split(',').map(s => s.trim()) : undefined,
       strategies,
-      passengers: [],
+      passengers,
     }
     const taskId = 'local-' + Date.now()
     createTask(config, send)
@@ -473,17 +473,16 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
             className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white placeholder:plasmo-text-[#707070] focus:plasmo-border-primary plasmo-outline-none" />
         </div>
 
-        <div className="plasmo-mt-4 plasmo-grid plasmo-grid-cols-2 plasmo-gap-3">
-          <div>
-            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block"><span className="plasmo-text-red-500">* </span>乘车人</label>
-            <input type="text" value={passengerName} onChange={e => setPassengerName(e.target.value)}
-              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none" />
-          </div>
-          <div>
-            <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">身份证号</label>
-            <input type="text" value={passengerId} onChange={e => setPassengerId(e.target.value)}
-              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none" />
-          </div>
+        <div className="plasmo-mt-4">
+          <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">
+            <span className="plasmo-text-red-500">* </span>乘车人
+          </label>
+          <PassengerPicker
+            passengers={passengers}
+            onChange={(list) => { setPassengers(list); clearFieldError('passengers') }}
+            error={errors.passengers}
+            onClearError={() => clearFieldError('passengers')}
+          />
         </div>
 
         <div className="plasmo-flex plasmo-gap-3 plasmo-mt-6 plasmo-justify-end">
