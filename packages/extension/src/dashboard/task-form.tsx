@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import type { TaskConfig, StationInfo } from '../lib/types'
+import type { TaskConfig, StationInfo, Passenger } from '../lib/types'
 import { createTask, fetchStations } from '../lib/api'
 import { getSendFn } from '../background/ws-client'
 import { routeMessage } from '../background/state'
@@ -147,6 +147,173 @@ function StationPicker({
         </div>
       )}
       {error && <p className="plasmo-text-red-500 plasmo-text-xs plasmo-mt-1">{error}</p>}
+    </div>
+  )
+}
+
+function PassengerPicker({
+  passengers,
+  onChange,
+  error,
+  onClearError,
+}: {
+  passengers: Passenger[]
+  onChange: (list: Passenger[]) => void
+  error?: string
+  onClearError?: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [list, setList] = useState<Passenger[]>([])
+  const [loading, setLoading] = useState(false)
+  const [fetchError, setFetchError] = useState('')
+  const [manualMode, setManualMode] = useState(false)
+  const [manualName, setManualName] = useState('')
+  const [manualId, setManualId] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const fetchPassengers = () => {
+    setLoading(true)
+    setFetchError('')
+    chrome.runtime.sendMessage({ type: 'FETCH_PASSENGERS' }, (response) => {
+      setLoading(false)
+      if (chrome.runtime.lastError || !response) {
+        setFetchError('请先打开 12306 官网并登录')
+        return
+      }
+      if (response.error === 'not_logged_in') {
+        setFetchError('not_logged_in')
+        return
+      }
+      if (response.error === 'fetch_failed') {
+        setFetchError('读取失败，请刷新 12306 页面后重试或手动输入')
+        return
+      }
+      if (response.passengers && response.passengers.length > 0) {
+        setList(response.passengers)
+        setFetchError('')
+      } else {
+        setFetchError('未找到常用乘车人，请在 12306 添加乘客或手动输入')
+      }
+    })
+  }
+
+  const togglePassenger = (p: Passenger) => {
+    onClearError?.()
+    const exists = passengers.find(x => x.id === p.id)
+    if (exists) {
+      onChange(passengers.filter(x => x.id !== p.id))
+    } else {
+      onChange([...passengers, p])
+    }
+  }
+
+  const addManual = () => {
+    if (!manualName || !manualId) return
+    onClearError?.()
+    onChange([...passengers, { id: manualId, name: manualName, idType: '身份证', idNumber: manualId }])
+    setManualName('')
+    setManualId('')
+    setManualMode(false)
+  }
+
+  const removePassenger = (id: string) => {
+    onChange(passengers.filter(x => x.id !== id))
+  }
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const openPicker = () => {
+    setOpen(true)
+    if (list.length === 0 && !loading && !fetchError) fetchPassengers()
+  }
+
+  return (
+    <div className="plasmo-relative" ref={containerRef}>
+      <div
+        className={`plasmo-flex plasmo-items-center plasmo-gap-1 plasmo-bg-canvas-soft plasmo-border ${error ? 'plasmo-border-red-500' : 'plasmo-border-border'} plasmo-rounded-md plasmo-px-3 plasmo-py-1.5 plasmo-min-h-[36px] plasmo-cursor-pointer`}
+        onClick={openPicker}
+      >
+        {passengers.length === 0 ? (
+          <span className="plasmo-text-sm plasmo-text-[#707070]">选择乘车人</span>
+        ) : (
+          passengers.map(p => (
+            <span key={p.id} className="plasmo-inline-flex plasmo-items-center plasmo-gap-1 plasmo-bg-[#1f2937] plasmo-text-white plasmo-text-xs plasmo-px-2 plasmo-py-0.5 plasmo-rounded">
+              {p.name}
+              <button onClick={(e) => { e.stopPropagation(); removePassenger(p.id) }}
+                className="plasmo-text-[#9a9a9a] hover:plasmo-text-white plasmo-ml-0.5">&times;</button>
+            </span>
+          ))
+        )}
+      </div>
+      {error && <p className="plasmo-text-red-500 plasmo-text-xs plasmo-mt-1">{error}</p>}
+
+      {open && (
+        <div className="plasmo-absolute plasmo-top-full plasmo-mt-1 plasmo-w-full plasmo-bg-[#161616] plasmo-border plasmo-border-border plasmo-rounded-md plasmo-z-50 plasmo-overflow-hidden">
+          {loading ? (
+            <div className="plasmo-px-3 plasmo-py-3 plasmo-text-sm plasmo-text-text-muted">加载中...</div>
+          ) : fetchError === 'not_logged_in' ? (
+            <div className="plasmo-p-4 plasmo-text-center">
+              <p className="plasmo-text-yellow-500 plasmo-text-sm plasmo-mb-3">未检测到 12306 登录状态</p>
+              <button onClick={() => chrome.tabs.create({ url: 'https://kyfw.12306.cn/otn/login/init' })}
+                className="plasmo-px-3 plasmo-py-1 plasmo-bg-primary plasmo-text-black plasmo-rounded-md plasmo-text-sm plasmo-mr-2">前往 12306 登录</button>
+              <button onClick={() => { setManualMode(true); setFetchError('') }}
+                className="plasmo-px-3 plasmo-py-1 plasmo-bg-transparent plasmo-border plasmo-border-border plasmo-text-text-muted plasmo-rounded-md plasmo-text-sm">手动输入</button>
+            </div>
+          ) : manualMode ? (
+            <div className="plasmo-p-3">
+              <input type="text" value={manualName} onChange={e => setManualName(e.target.value)} placeholder="姓名"
+                className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white plasmo-mb-2 focus:plasmo-border-primary plasmo-outline-none" />
+              <input type="text" value={manualId} onChange={e => setManualId(e.target.value)} placeholder="身份证号"
+                className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white plasmo-mb-3 focus:plasmo-border-primary plasmo-outline-none" />
+              <div className="plasmo-flex plasmo-justify-end plasmo-gap-2">
+                <button onClick={() => setManualMode(false)}
+                  className="plasmo-px-3 plasmo-py-1 plasmo-text-sm plasmo-text-text-muted">取消</button>
+                <button onClick={addManual}
+                  className="plasmo-px-3 plasmo-py-1 plasmo-bg-primary plasmo-text-black plasmo-rounded-md plasmo-text-sm">添加</button>
+              </div>
+            </div>
+          ) : fetchError ? (
+            <div className="plasmo-p-3">
+              <p className="plasmo-text-sm plasmo-text-text-muted plasmo-mb-2">{fetchError}</p>
+              <button onClick={() => { setManualMode(true); setFetchError('') }}
+                className="plasmo-px-3 plasmo-py-1 plasmo-bg-transparent plasmo-border plasmo-border-border plasmo-text-text-muted plasmo-rounded-md plasmo-text-sm">手动输入</button>
+            </div>
+          ) : list.length === 0 ? (
+            <div className="plasmo-px-3 plasmo-py-3 plasmo-text-sm plasmo-text-text-muted">无可用乘车人</div>
+          ) : (
+            <div style={{ maxHeight: 200, overflow: 'auto' }}>
+              {list.map(p => {
+                const selected = !!passengers.find(x => x.id === p.id)
+                return (
+                  <div key={p.id}
+                    onClick={() => togglePassenger(p)}
+                    className="plasmo-flex plasmo-items-center plasmo-px-3 plasmo-py-2 plasmo-cursor-pointer hover:plasmo-bg-[#1f2937] plasmo-text-sm"
+                  >
+                    <span className={selected ? 'plasmo-text-primary' : 'plasmo-text-[#4b5563]'} style={{ marginRight: 8 }}>
+                      {selected ? '✓' : '○'}
+                    </span>
+                    <div className="plasmo-flex-1">
+                      <span className="plasmo-text-white">{p.name}</span>
+                      <span className="plasmo-text-xs plasmo-text-text-muted plasmo-ml-2">{p.idNumber.replace(/(\d{4})\d+(\d{4})/, '$1****$2')}</span>
+                    </div>
+                    <span className="plasmo-text-xs plasmo-px-2 plasmo-py-0.5 plasmo-rounded" style={{ backgroundColor: '#1f2937', color: p.idType === '学生' ? '#f59e0b' : '#10b981' }}>
+                      {p.idType}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
