@@ -1,6 +1,7 @@
-import type { WsMessage, TaskConfig } from './types'
+import type { WsMessage, TaskConfig, StationInfo } from './types'
 
 const WS_URL = 'ws://localhost:8000/ws'
+const API_BASE = 'http://localhost:8000'
 
 export function createWsClient(
   onMessage: (msg: WsMessage) => void,
@@ -8,18 +9,49 @@ export function createWsClient(
 ) {
   let ws: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout>
+  let heartbeatTimer: ReturnType<typeof setInterval>
+  let heartbeatTimeout: ReturnType<typeof setTimeout>
+
+  function sendHeartbeat() {
+    if (ws?.readyState !== WebSocket.OPEN) return
+    send({ type: 'HEARTBEAT' })
+    clearTimeout(heartbeatTimeout)
+    heartbeatTimeout = setTimeout(() => {
+      ws?.close()
+    }, 5000)
+  }
+
+  function startHeartbeat() {
+    stopHeartbeat()
+    sendHeartbeat()
+    heartbeatTimer = setInterval(sendHeartbeat, 10_000)
+  }
+
+  function stopHeartbeat() {
+    clearInterval(heartbeatTimer)
+    clearTimeout(heartbeatTimeout)
+  }
 
   function connect() {
     ws = new WebSocket(WS_URL)
     ws.onopen = () => {
       onStatusChange(true)
-      ws?.send(JSON.stringify({ type: 'HEARTBEAT' }))
+      startHeartbeat()
     }
     ws.onmessage = (e) => {
-      try { onMessage(JSON.parse(e.data) as WsMessage) } catch {}
+      try {
+        const msg = JSON.parse(e.data) as WsMessage
+        if (msg.type === 'HEARTBEAT') {
+          clearTimeout(heartbeatTimeout)
+          onMessage(msg)
+          return
+        }
+        onMessage(msg)
+      } catch {}
     }
     ws.onclose = () => {
       onStatusChange(false)
+      stopHeartbeat()
       reconnectTimer = setTimeout(connect, 3000)
     }
     ws.onerror = () => ws?.close()
@@ -33,6 +65,7 @@ export function createWsClient(
 
   function disconnect() {
     clearTimeout(reconnectTimer)
+    stopHeartbeat()
     ws?.close()
   }
 
@@ -45,4 +78,11 @@ export async function createTask(config: TaskConfig, send: (msg: Record<string, 
 
 export async function updateTaskStatus(taskId: string, status: string, send: (msg: Record<string, unknown>) => void) {
   send({ type: 'UPDATE_TASK', taskId, status })
+}
+
+export async function fetchStations(q = ''): Promise<StationInfo[]> {
+  const url = `${API_BASE}/api/stations?q=${encodeURIComponent(q)}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`stations fetch failed: ${res.status}`)
+  return res.json()
 }

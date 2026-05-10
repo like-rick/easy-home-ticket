@@ -1,10 +1,12 @@
 import json
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import init_db, get_db, async_session
 from models.task import Task
 from models.solution import Solution
+from models.station import Station
 from engine.station import station_mapper
 from scheduler.scanner import scanner
 from ws_manager import ws_manager
@@ -18,6 +20,35 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="EasyHome Ticket Server", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/api/stations")
+async def get_stations(q: str = Query(default="", max_length=32)):
+    async with async_session() as db:
+        if q:
+            stmt = (
+                select(Station)
+                .where(
+                    Station.name.contains(q)
+                    | Station.pinyin.startswith(q.lower())
+                    | Station.full_pinyin.startswith(q.lower())
+                )
+                .order_by(Station.pinyin)
+                .limit(50)
+            )
+        else:
+            stmt = select(Station).order_by(Station.pinyin).limit(200)
+        rows = (await db.execute(stmt)).scalars().all()
+        return [{"name": s.name, "code": s.code, "pinyin": s.pinyin} for s in rows]
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):

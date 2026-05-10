@@ -33,7 +33,8 @@
       "tabs"
     ],
     "host_permissions": [
-      "https://kyfw.12306.cn/*"
+      "https://kyfw.12306.cn/*",
+      "http://localhost:8000/*"
     ]
   }
 }

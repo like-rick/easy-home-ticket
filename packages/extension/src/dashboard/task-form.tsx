@@ -1,10 +1,9 @@
-import React, { useState } from 'react'
-import type { TaskConfig } from '../lib/types'
-import { createTask } from '../lib/api'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import type { TaskConfig, StationInfo } from '../lib/types'
+import { createTask, fetchStations } from '../lib/api'
 import { getSendFn } from '../background/ws-client'
 import { routeMessage } from '../background/state'
 
-const STATIONS = ['上海', '上海虹桥', '北京', '北京南', '武汉', '广州南', '深圳北', '杭州东', '南京南', '成都东', '西安北']
 const SEAT_TYPES = ['二等座', '一等座', '商务座', '硬卧', '软卧', '硬座']
 const STRATEGIES = [
   { key: 'direct', label: '直达' },
@@ -13,9 +12,142 @@ const STRATEGIES = [
   { key: 'cross', label: '非同车换乘' },
 ]
 
+function StationPicker({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: StationInfo | null
+  onChange: (s: StationInfo | null) => void
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [options, setOptions] = useState<StationInfo[]>([])
+  const [loading, setLoading] = useState(false)
+  const [highlightIdx, setHighlightIdx] = useState(-1)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+
+  const doSearch = useCallback(async (q: string) => {
+    setLoading(true)
+    try {
+      const stations = await fetchStations(q)
+      setOptions(stations)
+      setHighlightIdx(-1)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const onInputChange = (v: string) => {
+    setQuery(v)
+    setOpen(true)
+    if (value && v !== value.name) onChange(null)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => doSearch(v), 200)
+  }
+
+  const select = (s: StationInfo) => {
+    onChange(s)
+    setQuery(s.name)
+    setOpen(false)
+    setHighlightIdx(-1)
+  }
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightIdx(i => Math.min(i + 1, options.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightIdx(i => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (highlightIdx >= 0 && options[highlightIdx]) {
+        select(options[highlightIdx])
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+    }
+  }
+
+  useEffect(() => {
+    if (open && !options.length && !loading) doSearch('')
+  }, [open])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (inputRef.current && !inputRef.current.contains(e.target as Node) &&
+          listRef.current && !listRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const highlightMatch = (text: string) => {
+    if (!query) return text
+    const idx = text.toLowerCase().indexOf(query.toLowerCase())
+    if (idx < 0) return text
+    return (
+      <>
+        {text.slice(0, idx)}
+        <span className="plasmo-text-primary">{text.slice(idx, idx + query.length)}</span>
+        {text.slice(idx + query.length)}
+      </>
+    )
+  }
+
+  return (
+    <div className="plasmo-relative">
+      <input
+        ref={inputRef}
+        type="text"
+        value={query}
+        onChange={e => onInputChange(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        autoComplete="off"
+        className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white placeholder:plasmo-text-[#707070] focus:plasmo-border-primary plasmo-outline-none"
+      />
+      {open && (
+        <div
+          ref={listRef}
+          className="plasmo-absolute plasmo-top-full plasmo-mt-1 plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-overflow-auto plasmo-z-50"
+          style={{ maxHeight: 240 }}
+        >
+          {loading ? (
+            <div className="plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-text-muted">加载中...</div>
+          ) : options.length === 0 ? (
+            <div className="plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-text-muted">无匹配车站</div>
+          ) : (
+            options.map((s, i) => (
+              <div
+                key={s.code}
+                onClick={() => select(s)}
+                className="plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-cursor-pointer plasmo-flex plasmo-justify-between plasmo-items-center"
+                style={{ backgroundColor: i === highlightIdx ? 'rgba(62,207,142,0.12)' : 'transparent' }}
+                onMouseEnter={() => setHighlightIdx(i)}
+              >
+                <span className="plasmo-text-white">{highlightMatch(s.name)}</span>
+                <span className="plasmo-text-xs plasmo-text-text-muted">{s.pinyin}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function TaskForm({ onClose }: { onClose: () => void }) {
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [from, setFrom] = useState<StationInfo | null>(null)
+  const [to, setTo] = useState<StationInfo | null>(null)
   const [date, setDate] = useState('')
   const [timeStart, setTimeStart] = useState('00:00')
   const [timeEnd, setTimeEnd] = useState('23:59')
@@ -33,9 +165,9 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
     const send = getSendFn()
     if (!send || !from || !to || !date) return
     const config: TaskConfig = {
-      name: `${from}→${to}`,
-      fromStation: from,
-      toStation: to,
+      name: `${from.name}→${to.name}`,
+      fromStation: from.name,
+      toStation: to.name,
       travelDate: date,
       timeStart,
       timeEnd,
@@ -59,19 +191,11 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
         <div className="plasmo-grid plasmo-grid-cols-2 plasmo-gap-3">
           <div>
             <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">出发站</label>
-            <select value={from} onChange={e => setFrom(e.target.value)}
-              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none">
-              <option value="">选择</option>
-              {STATIONS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <StationPicker value={from} onChange={setFrom} placeholder="输入拼音或站名搜索" />
           </div>
           <div>
             <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">目的站</label>
-            <select value={to} onChange={e => setTo(e.target.value)}
-              className="plasmo-w-full plasmo-bg-canvas-soft plasmo-border plasmo-border-border plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none">
-              <option value="">选择</option>
-              {STATIONS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <StationPicker value={to} onChange={setTo} placeholder="输入拼音或站名搜索" />
           </div>
           <div>
             <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block">日期</label>

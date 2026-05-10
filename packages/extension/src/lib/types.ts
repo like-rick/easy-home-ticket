@@ -1,3 +1,9 @@
+export interface StationInfo {
+  name: string
+  code: string
+  pinyin: string
+}
+
 export interface Segment {
   fromStation: string
   toStation: string

@@ -1,3 +1,4 @@
+import '~style.css'
 import React, { useState, useEffect, useCallback } from 'react'
 import { TaskList } from '../dashboard/task-list'
 import { SolutionBoard } from '../dashboard/solution-board'
@@ -56,7 +57,17 @@ export default function Dashboard() {
     })
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg.type === 'WS_STATUS') setWsConnected(msg.connected)
+      if (msg.type === 'HEARTBEAT') {
+        setLogs(prev => [...prev.slice(-200), {
+          time: new Date().toLocaleTimeString(),
+          event: 'heartbeat',
+          detail: 'pong'
+        }])
+      }
     })
+    chrome.runtime.sendMessage({ type: 'GET_WS_STATUS' }).then((res) => {
+      if (res?.connected !== undefined) setWsConnected(res.connected)
+    }).catch(() => {})
     return () => { unsub1(); unsub2(); unsub3(); unsub4() }
   }, [])
 
