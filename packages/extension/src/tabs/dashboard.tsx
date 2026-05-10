@@ -26,6 +26,21 @@ export default function Dashboard() {
   const [logs, setLogs] = useState<Array<{ time: string; event: string; detail: string }>>([])
   const [showForm, setShowForm] = useState(false)
   const [activePanel, setActivePanel] = useState<Panel>('tasks')
+  const [loginLoggedIn, setLoginLoggedIn] = useState<boolean | null>(null)
+  const [loginToastDismissed, setLoginToastDismissed] = useState(false)
+
+  const checkLogin = () => {
+    chrome.runtime.sendMessage({ type: 'CHECK_LOGIN_STATUS' }, (res) => {
+      if (chrome.runtime.lastError || !res || res.error) return
+      setLoginLoggedIn(res.loggedIn === true)
+    })
+  }
+
+  useEffect(() => { checkLogin() }, [])
+
+  useEffect(() => {
+    if (loginLoggedIn !== false) setLoginToastDismissed(false)
+  }, [loginLoggedIn])
 
   useEffect(() => {
     const unsub1 = subscribe('TASK_SYNCED', (data) => {
@@ -57,6 +72,7 @@ export default function Dashboard() {
     })
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg.type === 'WS_STATUS') setWsConnected(msg.connected)
+      if (msg.type === 'LOGIN_STATUS') setLoginLoggedIn(msg.loggedIn)
       if (msg.type === 'HEARTBEAT') {
         setLogs(prev => [...prev.slice(-200), {
           time: new Date().toLocaleTimeString(),
@@ -83,17 +99,42 @@ export default function Dashboard() {
           <h1 className="plasmo-text-base plasmo-font-semibold plasmo-tracking-tight">EasyHome Ticket</h1>
           <span className="plasmo-text-xs plasmo-px-1.5 plasmo-py-px plasmo-rounded-full plasmo-bg-primary/20 plasmo-text-primary plasmo-border plasmo-border-primary/40">v0.1</span>
         </div>
-        <div className="plasmo-flex plasmo-items-center plasmo-gap-2 plasmo-text-xs">
-          <span
-            className="plasmo-inline-block plasmo-w-1.5 plasmo-h-1.5 plasmo-rounded-full"
-            style={{
-              backgroundColor: wsConnected ? '#3ecf8e' : '#ff2201',
-              boxShadow: wsConnected ? '0 0 6px #3ecf8e88' : '0 0 6px #ff220188',
-            }}
-          />
-          <span className="plasmo-text-text-muted">{wsConnected ? 'Server 已连接' : '已断开'}</span>
+        <div className="plasmo-flex plasmo-items-center plasmo-gap-3 plasmo-text-xs">
+          <div className="plasmo-flex plasmo-items-center plasmo-gap-1.5">
+            <span
+              className="plasmo-inline-block plasmo-w-1.5 plasmo-h-1.5 plasmo-rounded-full"
+              style={{
+                backgroundColor: wsConnected ? '#3ecf8e' : '#ff2201',
+                boxShadow: wsConnected ? '0 0 6px #3ecf8e88' : '0 0 6px #ff220188',
+              }}
+            />
+            <span className="plasmo-text-text-muted">{wsConnected ? 'Server 已连接' : '已断开'}</span>
+          </div>
+          <button
+            onClick={checkLogin}
+            className="plasmo-flex plasmo-items-center plasmo-gap-1.5 plasmo-cursor-pointer hover:plasmo-opacity-80"
+            title="点击刷新"
+          >
+            <span
+              className="plasmo-inline-block plasmo-w-1.5 plasmo-h-1.5 plasmo-rounded-full"
+              style={{
+                backgroundColor: loginLoggedIn === true ? '#3ecf8e' : loginLoggedIn === false ? '#f59e0b' : '#6b7280',
+                boxShadow: loginLoggedIn === true ? '0 0 6px #3ecf8e88' : loginLoggedIn === false ? '0 0 6px #f59e0b88' : 'none',
+              }}
+            />
+            <span className="plasmo-text-text-muted">
+              {loginLoggedIn === null ? '检测中...' : loginLoggedIn ? '12306 已登录' : '12306 未登录'}
+            </span>
+          </button>
         </div>
       </header>
+      {loginLoggedIn === false && !loginToastDismissed && (
+        <div className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-gap-3 plasmo-bg-yellow-500/10 plasmo-border-b plasmo-border-yellow-500/20 plasmo-text-yellow-400 plasmo-px-6 plasmo-py-2 plasmo-text-sm">
+          <span>未检测到 12306 登录状态，请前往官网登录</span>
+          <button onClick={() => chrome.tabs.create({ url: 'https://kyfw.12306.cn/otn/login/init' })} className="plasmo-px-2 plasmo-py-0.5 plasmo-bg-yellow-500/20 plasmo-text-yellow-300 plasmo-rounded plasmo-text-xs hover:plasmo-bg-yellow-500/30">前往登录</button>
+          <button onClick={() => setLoginToastDismissed(true)} className="plasmo-text-yellow-400 hover:plasmo-text-yellow-300 plasmo-text-lg plasmo-leading-none">&times;</button>
+        </div>
+      )}
       <nav className="plasmo-flex plasmo-gap-1 plasmo-px-6 plasmo-py-2.5 plasmo-bg-canvas plasmo-border-b plasmo-border-border">
         {(['tasks', 'board', 'log'] as Panel[]).map(p => (
           <button key={p} onClick={() => setActivePanel(p)}

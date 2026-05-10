@@ -6,12 +6,33 @@ export const config: PlasmoCSConfig = {
   matches: ["https://kyfw.12306.cn/*"]
 }
 
+let loginCache: { loggedIn: boolean; ts: number; ttl: number } | null = null
+
+function cacheTtl() {
+  return (25 + Math.random() * 10) * 60_000 // 25–35 min
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'ORDER_SIGNAL') {
     executeOrder(msg as OrderSignal).then(result => {
       chrome.runtime.sendMessage({ type: 'ORDER_RESULT', taskId: msg.taskId, result })
     })
     sendResponse({ ack: true })
+    return true
+  }
+
+  if (msg.type === 'CHECK_LOGIN_STATUS') {
+    if (loginCache && Date.now() - loginCache.ts < loginCache.ttl) {
+      sendResponse({ loggedIn: loginCache.loggedIn })
+      return true
+    }
+    fetch('https://kyfw.12306.cn/otn/confirmPassenger/getPassengerDTOs', { credentials: 'include' })
+      .then(resp => resp.json())
+      .then(data => {
+        loginCache = { loggedIn: !!(data.status || data.httpstatus === 200), ts: Date.now(), ttl: cacheTtl() }
+        sendResponse({ loggedIn: loginCache.loggedIn })
+      })
+      .catch(() => { sendResponse({ loggedIn: false }) })
     return true
   }
 
@@ -26,13 +47,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 })
 
 async function fetchPassengers(): Promise<Passenger[]> {
-  // Check login cookies
-  const cookies = document.cookie
-  if (!cookies.includes('_passport_ct') && !cookies.includes('tk=') && !cookies.includes('uamtk')) {
-    throw new Error('not_logged_in')
-  }
-
-  // Navigate to passenger page if not already there
   const onPassengerPage = location.href.includes('passengers') || location.href.includes('passenger')
   if (!onPassengerPage) {
     const resp = await fetch('https://kyfw.12306.cn/otn/confirmPassenger/getPassengerDTOs', { credentials: 'include' })

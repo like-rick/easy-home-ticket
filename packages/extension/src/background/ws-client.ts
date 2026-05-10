@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'GET_WS_STATUS') {
     sendResponse({ connected: wsConnected })
   }
-  if (msg.type === 'FETCH_PASSENGERS') {
+  if (msg.type === 'FETCH_PASSENGERS' || msg.type === 'CHECK_LOGIN_STATUS') {
     forwardToContentScript(msg, sendResponse)
     return true
   }

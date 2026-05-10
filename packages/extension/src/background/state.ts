@@ -54,3 +54,29 @@ async function handleOrderSignal(signal: OrderSignal) {
     })
   }
 }
+
+let lastKnownLoginState: boolean | null = null
+let loginTimer: ReturnType<typeof setTimeout> | null = null
+
+export function startLoginMonitor() {
+  const scheduleNext = () => {
+    const delay = (30 + Math.random() * 30) * 60_000 // 30–60 min
+    loginTimer = setTimeout(tick, delay)
+  }
+
+  const tick = () => {
+    forwardToContentScript({ type: 'CHECK_LOGIN_STATUS' }, (res) => {
+      if (!res || res.error || typeof res.loggedIn !== 'boolean') {
+        scheduleNext()
+        return
+      }
+      if (res.loggedIn !== lastKnownLoginState) {
+        lastKnownLoginState = res.loggedIn
+        chrome.runtime.sendMessage({ type: 'LOGIN_STATUS', loggedIn: res.loggedIn }).catch(() => {})
+      }
+      scheduleNext()
+    })
+  }
+
+  tick()
+}
