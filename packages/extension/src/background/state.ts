@@ -21,6 +21,24 @@ export function routeMessage(msg: WsMessage) {
   }
 }
 
+export async function forwardToContentScript(
+  msg: Record<string, unknown>,
+  sendResponse: (response: Record<string, unknown>) => void,
+) {
+  const [tab] = await chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' })
+  if (!tab?.id) {
+    sendResponse({ error: 'no_12306_tab' })
+    return
+  }
+  chrome.tabs.sendMessage(tab.id, msg, (response) => {
+    if (chrome.runtime.lastError) {
+      sendResponse({ error: 'content_script_not_ready' })
+      return
+    }
+    sendResponse(response ?? {})
+  })
+}
+
 async function handleOrderSignal(signal: OrderSignal) {
   const [tab] = await chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' })
   if (tab?.id) {

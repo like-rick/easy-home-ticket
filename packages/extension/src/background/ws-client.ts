@@ -1,6 +1,6 @@
 import { createWsClient } from '../lib/api'
 import type { WsMessage } from '../lib/types'
-import { routeMessage } from './state'
+import { forwardToContentScript, routeMessage } from './state'
 
 let sendFn: ((msg: Record<string, unknown>) => void) | null = null
 let wsConnected = false
@@ -20,6 +20,10 @@ export function startWsClient() {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'GET_WS_STATUS') {
     sendResponse({ connected: wsConnected })
+  }
+  if (msg.type === 'FETCH_PASSENGERS') {
+    forwardToContentScript(msg, sendResponse)
+    return true
   }
 })
 

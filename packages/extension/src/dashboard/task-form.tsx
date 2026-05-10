@@ -180,6 +180,10 @@ function PassengerPicker({
         setFetchError('请先打开 12306 官网并登录')
         return
       }
+      if (response.error === 'no_12306_tab' || response.error === 'content_script_not_ready') {
+        setFetchError('请先打开 12306 官网并登录')
+        return
+      }
       if (response.error === 'not_logged_in') {
         setFetchError('not_logged_in')
         return
