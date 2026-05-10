@@ -187,12 +187,28 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
     arr.includes(item) ? arr.filter(x => x !== item) : [...arr, item]
 
   const handleSubmit = () => {
+    const newErrors: Record<string, string> = {}
+
+    if (!from) newErrors.from = '请选择出发站'
+    if (!to) newErrors.to = '请选择到达站'
+    if (!date) newErrors.date = '请选择出行日期'
+    if (!timeStart) newErrors.timeStart = '请选择开始时间'
+    if (!timeEnd) newErrors.timeEnd = '请选择结束时间'
+    if (!maxExtra || maxExtra <= 0) newErrors.maxExtra = '请填写最多加价金额'
+    if (seatTypes.length === 0) newErrors.seatTypes = '请至少选择一种座位类型'
+    if (strategies.length === 0) newErrors.strategies = '请至少选择一种监控策略'
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+
     const send = getSendFn()
-    if (!send || !from || !to || !date) return
+    if (!send) return
     const config: TaskConfig = {
-      name: `${from.name}→${to.name}`,
-      fromStation: from.name,
-      toStation: to.name,
+      name: `${from!.name}→${to!.name}`,
+      fromStation: from!.name,
+      toStation: to!.name,
       travelDate: date,
       timeStart,
       timeEnd,
@@ -200,7 +216,7 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
       seatTypes,
       trainNos: trainNos ? trainNos.split(',').map(s => s.trim()) : undefined,
       strategies,
-      passengers: passengerName ? [{ id: passengerId || 'p1', name: passengerName, idType: '身份证', idNumber: passengerId }] : [],
+      passengers: [],
     }
     const taskId = 'local-' + Date.now()
     createTask(config, send)
