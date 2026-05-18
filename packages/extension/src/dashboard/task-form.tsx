@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import type { TaskConfig, StationInfo, Passenger } from '../lib/types'
-import { createTask, fetchStations } from '../lib/api'
-import { getSendFn } from '../background/ws-client'
-import { routeMessage } from '../background/state'
+import { fetchStations } from '../lib/api'
 
 const SEAT_TYPES = ['二等座', '一等座', '商务座', '硬卧', '软卧', '硬座']
 const STRATEGIES = [
@@ -174,30 +172,34 @@ function PassengerPicker({
   const fetchPassengers = () => {
     setLoading(true)
     setFetchError('')
-    chrome.runtime.sendMessage({ type: 'FETCH_PASSENGERS' }, (response) => {
-      setLoading(false)
-      if (chrome.runtime.lastError || !response) {
+    chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' }, (tabs) => {
+      const tab = tabs.find(t => !t.discarded)
+      if (!tab?.id) {
+        setLoading(false)
         setFetchError('请先打开 12306 官网并登录')
         return
       }
-      if (response.error === 'no_12306_tab' || response.error === 'content_script_not_ready') {
-        setFetchError('请先打开 12306 官网并登录')
-        return
-      }
-      if (response.error === 'not_logged_in') {
-        setFetchError('not_logged_in')
-        return
-      }
-      if (response.error === 'fetch_failed') {
-        setFetchError('读取失败，请刷新 12306 页面后重试或手动输入')
-        return
-      }
-      if (response.passengers && response.passengers.length > 0) {
-        setList(response.passengers)
-        setFetchError('')
-      } else {
-        setFetchError('未找到常用乘车人，请在 12306 添加乘客或手动输入')
-      }
+      chrome.tabs.sendMessage(tab.id, { type: 'FETCH_PASSENGERS' }, (response) => {
+        setLoading(false)
+        if (chrome.runtime.lastError || !response) {
+          setFetchError('请先打开 12306 官网并登录')
+          return
+        }
+        if (response.error === 'not_logged_in') {
+          setFetchError('not_logged_in')
+          return
+        }
+        if (response.error === 'fetch_failed') {
+          setFetchError('读取失败，请刷新 12306 页面后重试或手动输入')
+          return
+        }
+        if (response.passengers && response.passengers.length > 0) {
+          setList(response.passengers)
+          setFetchError('')
+        } else {
+          setFetchError('未找到常用乘车人，请在 12306 添加乘客或手动输入')
+        }
+      })
     })
   }
 
@@ -374,8 +376,6 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
       return
     }
 
-    const send = getSendFn()
-    if (!send) return
     const config: TaskConfig = {
       name: `${from!.name}→${to!.name}`,
       fromStation: from!.name,
@@ -390,16 +390,17 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
       passengers,
     }
     const taskId = 'local-' + Date.now()
-    createTask(config, send)
-    routeMessage({ type: 'TASK_CREATED', ...config, id: taskId } as any)
+    chrome.runtime.sendMessage({ type: 'SEND_WS', payload: { type: 'CREATE_TASK', ...config } }).catch(() => {})
+    chrome.runtime.sendMessage({ type: 'TASK_CREATED', ...config, id: taskId }).catch(() => {})
     onClose()
   }
 
   return (
     <div className="plasmo-fixed plasmo-inset-0 plasmo-flex plasmo-items-center plasmo-justify-center plasmo-z-50" style={{ backgroundColor: 'rgba(0,0,0,0.53)' }}>
-      <div className="plasmo-bg-canvas plasmo-rounded-xl plasmo-p-6 plasmo-w-[480px] plasmo-max-h-[80vh] plasmo-overflow-auto plasmo-border plasmo-border-border">
-        <h2 className="plasmo-text-lg plasmo-font-semibold plasmo-text-white plasmo-mb-4">新建监控任务</h2>
+      <div className="plasmo-bg-canvas plasmo-rounded-xl plasmo-w-[480px] plasmo-max-h-[80vh] plasmo-flex plasmo-flex-col plasmo-border plasmo-border-border">
+        <h2 className="plasmo-text-lg plasmo-font-semibold plasmo-text-white plasmo-p-6 plasmo-pb-0">新建监控任务</h2>
 
+        <div className="plasmo-overflow-auto plasmo-p-6 plasmo-flex-1">
         <div className="plasmo-grid plasmo-grid-cols-2 plasmo-gap-3">
           <div>
             <label className="plasmo-text-sm plasmo-font-medium plasmo-text-text-muted plasmo-mb-1 plasmo-block"><span className="plasmo-text-red-500">* </span>出发站</label>
@@ -489,7 +490,8 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
           />
         </div>
 
-        <div className="plasmo-flex plasmo-gap-3 plasmo-mt-6 plasmo-justify-end">
+        </div>
+        <div className="plasmo-flex plasmo-gap-3 plasmo-justify-end plasmo-p-6 plasmo-border-t plasmo-border-border plasmo-shrink-0">
           <button onClick={onClose}
             className="plasmo-px-5 plasmo-py-2 plasmo-bg-transparent plasmo-border plasmo-border-border plasmo-text-text-muted plasmo-rounded-md plasmo-text-sm plasmo-font-medium">
             取消

@@ -25,6 +25,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     forwardToContentScript(msg, sendResponse)
     return true
   }
+  if (msg.type === 'SEND_WS' && msg.payload) {
+    sendFn?.(msg.payload as Record<string, unknown>)
+  }
 })
 
 export function getSendFn() {

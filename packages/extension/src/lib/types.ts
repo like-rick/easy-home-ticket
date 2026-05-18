@@ -19,6 +19,40 @@ export interface Passenger {
   name: string
   idType: string
   idNumber: string
+  sexCode?: string
+  sexName?: string
+  bornDate?: string
+  countryCode?: string
+  idTypeCode?: string
+  passengerType?: string
+  passengerTypeName?: string
+  mobileNo?: string
+  phoneNo?: string
+  email?: string
+  address?: string
+  postalcode?: string
+  firstLetter?: string
+  recordCount?: string
+  isUserSelf?: string
+  totalTimes?: string
+  deleteTime?: string
+  allEncStr?: string
+  isAdult?: string
+  isYongThan10?: string
+  isYongThan14?: string
+  isOldThan60?: string
+  ifReceive?: string
+  isActive?: string
+  isBuyTicket?: string
+  lastTime?: string
+  passengerUuid?: string
+  ifPreferential?: string
+  mobileCode?: string
+  temporaryAge60?: string
+  gatBornDate?: string
+  gatValidDateStart?: string
+  gatValidDateEnd?: string
+  gatVersion?: string
 }
 
 export interface TaskConfig {

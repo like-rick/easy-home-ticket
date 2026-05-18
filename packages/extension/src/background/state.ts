@@ -25,7 +25,8 @@ export async function forwardToContentScript(
   msg: Record<string, unknown>,
   sendResponse: (response: Record<string, unknown>) => void,
 ) {
-  const [tab] = await chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' })
+  const tabs = await chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' })
+  const tab = tabs.find(t => !t.discarded)
   if (!tab?.id) {
     sendResponse({ error: 'no_12306_tab' })
     return
@@ -40,7 +41,8 @@ export async function forwardToContentScript(
 }
 
 async function handleOrderSignal(signal: OrderSignal) {
-  const [tab] = await chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' })
+  const tabs = await chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' })
+  const tab = tabs.find(t => !t.discarded)
   if (tab?.id) {
     chrome.tabs.sendMessage(tab.id, signal).catch(() => {})
   } else {
@@ -60,7 +62,7 @@ let loginTimer: ReturnType<typeof setTimeout> | null = null
 
 export function startLoginMonitor() {
   const scheduleNext = () => {
-    const delay = (30 + Math.random() * 30) * 60_000 // 30–60 min
+    const delay = 6 * 3600_000 // 6 hours
     loginTimer = setTimeout(tick, delay)
   }
 

@@ -5,7 +5,7 @@
   "description": "easy-home-ticket",
   "author": "like",
   "scripts": {
-    "dev": "plasmo dev",
+    "dev": "rm -rf ./build && plasmo dev",
     "build": "plasmo build",
     "package": "plasmo package"
   },
