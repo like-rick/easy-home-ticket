@@ -90,8 +90,18 @@ export interface OrderSignal {
   deadline: string
 }
 
+export interface TaskItem {
+  id: string
+  name: string
+  fromStation: string
+  toStation: string
+  travelDate: string
+  status: string
+}
+
 export type WsMessage =
-  | { type: 'TASK_SYNCED'; taskId: string }
+  | { type: 'TASK_SYNCED'; taskId: string; task?: TaskConfig & { id: string; status: string } }
+  | { type: 'TASKS_LIST'; tasks: (TaskConfig & { id: string; status: string })[] }
   | { type: 'SOLUTION_UPDATE'; taskId: string; solutionId?: string; status?: string; solutions?: SolutionData[]; detail?: Record<string, unknown> }
   | { type: 'SCAN_LOG'; taskId: string; solutionId: string; event: string; detail: string }
   | { type: 'ORDER_SIGNAL' } & OrderSignal

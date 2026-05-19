@@ -4,19 +4,10 @@ import { TaskList } from '../dashboard/task-list'
 import { SolutionBoard } from '../dashboard/solution-board'
 import { LogStream } from '../dashboard/log-stream'
 import { TaskForm } from '../dashboard/task-form'
-import type { WsMessage, SolutionData, TaskConfig } from '../lib/types'
+import type { WsMessage, SolutionData, TaskItem } from '../lib/types'
 import { subscribe } from '../background/state'
 
 type Panel = 'tasks' | 'board' | 'log'
-
-interface TaskItem {
-  id: string
-  name: string
-  fromStation: string
-  toStation: string
-  travelDate: string
-  status: string
-}
 
 export default function Dashboard() {
   const [wsConnected, setWsConnected] = useState(false)
@@ -43,26 +34,11 @@ export default function Dashboard() {
   }, [loginLoggedIn])
 
   useEffect(() => {
-    const unsub1 = subscribe('TASK_SYNCED', (data) => {
-      const msg = data as WsMessage & { taskId: string }
-      setTasks(prev => prev.map(t => t.id === msg.taskId ? { ...t, status: 'active' } : t))
-    })
-    const unsub2 = subscribe('TASK_CREATED', (data) => {
-      const cfg = data as TaskConfig & { id: string }
-      setTasks(prev => [...prev, {
-        id: cfg.id,
-        name: cfg.name,
-        fromStation: cfg.fromStation,
-        toStation: cfg.toStation,
-        travelDate: cfg.travelDate,
-        status: 'pending',
-      }])
-    })
-    const unsub3 = subscribe('SOLUTION_UPDATE', (data) => {
+    const unsub1 = subscribe('SOLUTION_UPDATE', (data) => {
       const msg = data as WsMessage & { solutions?: SolutionData[] }
       if (msg.solutions) setSolutions(msg.solutions)
     })
-    const unsub4 = subscribe('SCAN_LOG', (data) => {
+    const unsub2 = subscribe('SCAN_LOG', (data) => {
       const msg = data as WsMessage & { event: string; detail: string }
       setLogs(prev => [...prev.slice(-200), {
         time: new Date().toLocaleTimeString(),
@@ -80,16 +56,59 @@ export default function Dashboard() {
           detail: 'pong'
         }])
       }
+      if (msg.type === 'TASKS_LIST' && msg.tasks) {
+        setTasks(msg.tasks.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          fromStation: t.fromStation,
+          toStation: t.toStation,
+          travelDate: t.travelDate,
+          status: t.status,
+        })))
+      }
+      if (msg.type === 'TASK_SYNCED') {
+        if (msg.task) {
+          const t = msg.task
+          setTasks(prev => {
+            const exists = prev.find(p => p.id === msg.taskId)
+            if (exists) {
+              return prev.map(p => p.id === msg.taskId ? { ...p, status: t.status } : p)
+            }
+            return [...prev, {
+              id: t.id,
+              name: t.name,
+              fromStation: t.fromStation,
+              toStation: t.toStation,
+              travelDate: t.travelDate,
+              status: t.status,
+            }]
+          })
+        } else {
+          setTasks(prev => prev.map(p => p.id === msg.taskId ? { ...p, status: 'active' } : p))
+        }
+      }
+      if (msg.type === 'SOLUTION_UPDATE' && msg.solutions) {
+        setSolutions(msg.solutions)
+      }
+      if (msg.type === 'SCAN_LOG') {
+        setLogs(prev => [...prev.slice(-200), {
+          time: new Date().toLocaleTimeString(),
+          event: msg.event || '',
+          detail: typeof msg.detail === 'string' ? msg.detail : JSON.stringify(msg.detail)
+        }])
+      }
     })
     chrome.runtime.sendMessage({ type: 'GET_WS_STATUS' }).then((res) => {
       if (res?.connected !== undefined) setWsConnected(res.connected)
     }).catch(() => {})
-    return () => { unsub1(); unsub2(); unsub3(); unsub4() }
+    chrome.runtime.sendMessage({ type: 'SEND_WS', payload: { type: 'GET_TASKS' } }).catch(() => {})
+    return () => { unsub1(); unsub2() }
   }, [])
 
   const handleSelectTask = useCallback((taskId: string) => {
     setSelectedTaskId(taskId)
     setActivePanel('board')
+    chrome.runtime.sendMessage({ type: 'SEND_WS', payload: { type: 'GET_SOLUTIONS', taskId } }).catch(() => {})
   }, [])
 
   return (

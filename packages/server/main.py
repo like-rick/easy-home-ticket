@@ -1,4 +1,5 @@
 import json
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +11,19 @@ from models.station import Station
 from engine.station import station_mapper
 from scheduler.scanner import scanner
 from ws_manager import ws_manager
+from datetime import date
 from sqlalchemy import select
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.FileHandler("server.log", encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
+)
+logger = logging.getLogger("easyhome")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,10 +63,29 @@ async def get_stations(q: str = Query(default="", max_length=32)):
         return [{"name": s.name, "code": s.code, "pinyin": s.pinyin} for s in rows]
 
 
+def _task_to_dict(task: Task) -> dict:
+    return {
+        "id": task.id,
+        "name": task.name,
+        "fromStation": task.from_station,
+        "toStation": task.to_station,
+        "travelDate": task.travel_date.isoformat(),
+        "timeStart": task.time_start,
+        "timeEnd": task.time_end,
+        "maxExtraFee": task.max_extra_fee,
+        "seatTypes": json.loads(task.seat_types),
+        "trainNos": json.loads(task.train_nos) if task.train_nos else None,
+        "strategies": json.loads(task.strategies),
+        "passengers": json.loads(task.passengers),
+        "status": task.status,
+    }
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     client_id = str(id(ws))
     await ws_manager.connect(client_id, ws)
+    logger.info("WS connected  client=%s", client_id)
     try:
         while True:
             raw = await ws.receive_text()
@@ -61,12 +93,15 @@ async def websocket_endpoint(ws: WebSocket):
             msg_type = msg.get("type")
 
             if msg_type == "CREATE_TASK":
+                logger.info("CREATE_TASK  client=%s  from=%s  to=%s  date=%s  passengers=%s",
+                    client_id, msg.get("fromStation"), msg.get("toStation"),
+                    msg.get("travelDate"), len(msg.get("passengers", [])))
                 async with async_session() as db:
                     task = Task(
                         name=msg.get("name", ""),
                         from_station=msg["fromStation"],
                         to_station=msg["toStation"],
-                        travel_date=msg["travelDate"],
+                        travel_date=date.fromisoformat(msg["travelDate"]),
                         time_start=msg.get("timeStart", "00:00"),
                         time_end=msg.get("timeEnd", "23:59"),
                         max_extra_fee=msg.get("maxExtraFee", 30),
@@ -78,9 +113,15 @@ async def websocket_endpoint(ws: WebSocket):
                     db.add(task)
                     await db.commit()
                     scanner.start_task(task.id)
-                    await ws_manager.send(client_id, {"type": "TASK_SYNCED", "taskId": task.id})
+                    await ws_manager.send(client_id, {
+                        "type": "TASK_SYNCED",
+                        "taskId": task.id,
+                        "task": _task_to_dict(task),
+                    })
 
             elif msg_type == "UPDATE_TASK":
+                logger.info("UPDATE_TASK  client=%s  taskId=%s  status=%s",
+                    client_id, msg.get("taskId"), msg.get("status"))
                 async with async_session() as db:
                     task = (await db.execute(select(Task).where(Task.id == msg["taskId"]))).scalar_one_or_none()
                     if task:
@@ -94,6 +135,7 @@ async def websocket_endpoint(ws: WebSocket):
                         await ws_manager.send(client_id, {"type": "TASK_SYNCED", "taskId": task.id})
 
             elif msg_type == "GET_SOLUTIONS":
+                logger.info("GET_SOLUTIONS  client=%s  taskId=%s", client_id, msg.get("taskId"))
                 async with async_session() as db:
                     sols = (await db.execute(
                         select(Solution).where(Solution.task_id == msg["taskId"])
@@ -116,7 +158,17 @@ async def websocket_endpoint(ws: WebSocket):
                         ],
                     })
 
+            elif msg_type == "GET_TASKS":
+                logger.info("GET_TASKS  client=%s", client_id)
+                async with async_session() as db:
+                    rows = (await db.execute(select(Task).order_by(Task.created_at.desc()))).scalars().all()
+                    await ws_manager.send(client_id, {
+                        "type": "TASKS_LIST",
+                        "tasks": [_task_to_dict(t) for t in rows],
+                    })
+
             elif msg_type == "ORDER_RESULT":
+                logger.info("ORDER_RESULT  client=%s  taskId=%s", client_id, msg.get("taskId"))
                 await ws_manager.broadcast({
                     "type": "SCAN_LOG",
                     "taskId": msg.get("taskId", ""),
@@ -128,6 +180,7 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws_manager.send(client_id, {"type": "HEARTBEAT"})
 
     except WebSocketDisconnect:
+        logger.info("WS disconnected  client=%s", client_id)
         ws_manager.disconnect(client_id)
 
 if __name__ == "__main__":

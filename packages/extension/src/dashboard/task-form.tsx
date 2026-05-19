@@ -389,9 +389,7 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
       strategies,
       passengers,
     }
-    const taskId = 'local-' + Date.now()
     chrome.runtime.sendMessage({ type: 'SEND_WS', payload: { type: 'CREATE_TASK', ...config } }).catch(() => {})
-    chrome.runtime.sendMessage({ type: 'TASK_CREATED', ...config, id: taskId }).catch(() => {})
     onClose()
   }
 

@@ -1,0 +1,6 @@
+2026-05-18 23:19:07  INFO     CREATE_TASK  client=4393875280  from=安阳  to=北京  date=2026-05-20  passengers=1
+2026-05-18 23:21:57  INFO     WS disconnected  client=4393875280
+2026-05-18 23:21:57  INFO     connection closed
+2026-05-18 23:21:57  INFO     127.0.0.1:50980 - "WebSocket /ws" [accepted]
+2026-05-18 23:21:57  INFO     WS connected  client=4394133680
+2026-05-18 23:21:57  INFO     connection open
