@@ -1,4 +1,4 @@
-import type { WsMessage, TaskConfig, StationInfo } from './types'
+import type { WsMessage, StationInfo } from './types'
 
 const WS_URL = 'ws://localhost:8000/ws'
 const API_BASE = 'http://localhost:8000'
@@ -70,10 +70,6 @@ export function createWsClient(
   }
 
   return { connect, send, disconnect }
-}
-
-export async function createTask(config: TaskConfig, send: (msg: Record<string, unknown>) => void) {
-  send({ type: 'CREATE_TASK', ...config })
 }
 
 export async function updateTaskStatus(taskId: string, status: string, send: (msg: Record<string, unknown>) => void) {

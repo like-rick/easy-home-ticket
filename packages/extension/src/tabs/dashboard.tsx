@@ -4,8 +4,7 @@ import { TaskList } from '../dashboard/task-list'
 import { SolutionBoard } from '../dashboard/solution-board'
 import { LogStream } from '../dashboard/log-stream'
 import { TaskForm } from '../dashboard/task-form'
-import type { WsMessage, SolutionData, TaskItem } from '../lib/types'
-import { subscribe } from '../background/state'
+import type { SolutionData, TaskItem } from '../lib/types'
 
 type Panel = 'tasks' | 'board' | 'log'
 
@@ -20,95 +19,90 @@ export default function Dashboard() {
   const [loginLoggedIn, setLoginLoggedIn] = useState<boolean | null>(null)
   const [loginToastDismissed, setLoginToastDismissed] = useState(false)
 
-  const checkLogin = () => {
-    chrome.runtime.sendMessage({ type: 'CHECK_LOGIN_STATUS' }, (res) => {
-      if (chrome.runtime.lastError || !res || res.error) return
-      setLoginLoggedIn(res.loggedIn === true)
+  // ---- helpers for querying content script & background ----
+
+  const sendToContent = <T,>(type: string, cb: (res: T) => void) => {
+    chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' }, (tabs) => {
+      const tab = tabs.find(t => !t.discarded)
+      if (!tab?.id) return
+      chrome.tabs.sendMessage(tab.id, { type }, (res) => {
+        if (chrome.runtime.lastError || !res) return
+        cb(res as T)
+      })
     })
   }
 
-  useEffect(() => { checkLogin() }, [])
+  const sendWs = (payload: Record<string, unknown>) => {
+    chrome.runtime.sendMessage({ type: 'SEND_WS', payload }).catch(() => {})
+  }
+
+  const checkLogin = () => sendToContent<{ loggedIn: boolean; error?: string }>('CHECK_LOGIN_STATUS', (res) => {
+    if (!res.error) setLoginLoggedIn(res.loggedIn === true)
+  })
+
+  const checkWs = () => {
+    chrome.runtime.sendMessage({ type: 'GET_WS_STATUS' }).then((res) => {
+      if (res?.connected !== undefined) setWsConnected(res.connected)
+    }).catch(() => {})
+  }
+
+  // ---- init: listeners + load data ----
 
   useEffect(() => {
     if (loginLoggedIn !== false) setLoginToastDismissed(false)
   }, [loginLoggedIn])
 
   useEffect(() => {
-    const unsub1 = subscribe('SOLUTION_UPDATE', (data) => {
-      const msg = data as WsMessage & { solutions?: SolutionData[] }
-      if (msg.solutions) setSolutions(msg.solutions)
-    })
-    const unsub2 = subscribe('SCAN_LOG', (data) => {
-      const msg = data as WsMessage & { event: string; detail: string }
-      setLogs(prev => [...prev.slice(-200), {
-        time: new Date().toLocaleTimeString(),
-        event: msg.event || '',
-        detail: typeof msg.detail === 'string' ? msg.detail : JSON.stringify(msg.detail)
-      }])
-    })
-    chrome.runtime.onMessage.addListener((msg) => {
-      if (msg.type === 'WS_STATUS') setWsConnected(msg.connected)
-      if (msg.type === 'LOGIN_STATUS') setLoginLoggedIn(msg.loggedIn)
-      if (msg.type === 'HEARTBEAT') {
-        setLogs(prev => [...prev.slice(-200), {
-          time: new Date().toLocaleTimeString(),
-          event: 'heartbeat',
-          detail: 'pong'
-        }])
-      }
-      if (msg.type === 'TASKS_LIST' && msg.tasks) {
-        setTasks(msg.tasks.map((t: any) => ({
-          id: t.id,
-          name: t.name,
-          fromStation: t.fromStation,
-          toStation: t.toStation,
-          travelDate: t.travelDate,
-          status: t.status,
-        })))
-      }
-      if (msg.type === 'TASK_SYNCED') {
-        if (msg.task) {
-          const t = msg.task
-          setTasks(prev => {
-            const exists = prev.find(p => p.id === msg.taskId)
-            if (exists) {
-              return prev.map(p => p.id === msg.taskId ? { ...p, status: t.status } : p)
-            }
-            return [...prev, {
-              id: t.id,
-              name: t.name,
-              fromStation: t.fromStation,
-              toStation: t.toStation,
-              travelDate: t.travelDate,
-              status: t.status,
-            }]
-          })
-        } else {
-          setTasks(prev => prev.map(p => p.id === msg.taskId ? { ...p, status: 'active' } : p))
-        }
-      }
-      if (msg.type === 'SOLUTION_UPDATE' && msg.solutions) {
-        setSolutions(msg.solutions)
-      }
-      if (msg.type === 'SCAN_LOG') {
-        setLogs(prev => [...prev.slice(-200), {
-          time: new Date().toLocaleTimeString(),
-          event: msg.event || '',
-          detail: typeof msg.detail === 'string' ? msg.detail : JSON.stringify(msg.detail)
-        }])
-      }
-    })
-    chrome.runtime.sendMessage({ type: 'GET_WS_STATUS' }).then((res) => {
-      if (res?.connected !== undefined) setWsConnected(res.connected)
-    }).catch(() => {})
-    chrome.runtime.sendMessage({ type: 'SEND_WS', payload: { type: 'GET_TASKS' } }).catch(() => {})
-    return () => { unsub1(); unsub2() }
+    checkLogin()
+    checkWs()
+    sendWs({ type: 'GET_TASKS' })
   }, [])
+
+  useEffect(() => {
+    const handler = (msg: any) => {
+      switch (msg.type) {
+        case 'WS_STATUS':
+          setWsConnected(msg.connected)
+          break
+        case 'LOGIN_STATUS':
+          setLoginLoggedIn(msg.loggedIn)
+          break
+        case 'HEARTBEAT':
+          setLogs(prev => [...prev.slice(-200), { time: new Date().toLocaleTimeString(), event: 'heartbeat', detail: 'pong' }])
+          break
+        case 'TASKS_LIST':
+          if (msg.tasks) setTasks(msg.tasks.map((t: any) => ({ id: t.id, name: t.name, fromStation: t.fromStation, toStation: t.toStation, travelDate: t.travelDate, status: t.status })))
+          break
+        case 'TASK_SYNCED':
+          if (msg.task) {
+            const t = msg.task
+            setTasks(prev => {
+              const exists = prev.find(p => p.id === msg.taskId)
+              if (exists) return prev.map(p => p.id === msg.taskId ? { ...p, status: t.status } : p)
+              return [...prev, { id: t.id, name: t.name, fromStation: t.fromStation, toStation: t.toStation, travelDate: t.travelDate, status: t.status }]
+            })
+          } else {
+            setTasks(prev => prev.map(p => p.id === msg.taskId ? { ...p, status: 'active' } : p))
+          }
+          break
+        case 'SOLUTION_UPDATE':
+          if (msg.solutions) setSolutions(msg.solutions)
+          break
+        case 'SCAN_LOG':
+          setLogs(prev => [...prev.slice(-200), { time: new Date().toLocaleTimeString(), event: msg.event || '', detail: typeof msg.detail === 'string' ? msg.detail : JSON.stringify(msg.detail) }])
+          break
+      }
+    }
+    chrome.runtime.onMessage.addListener(handler)
+    return () => chrome.runtime.onMessage.removeListener(handler)
+  }, [])
+
+  // ---- handlers ----
 
   const handleSelectTask = useCallback((taskId: string) => {
     setSelectedTaskId(taskId)
     setActivePanel('board')
-    chrome.runtime.sendMessage({ type: 'SEND_WS', payload: { type: 'GET_SOLUTIONS', taskId } }).catch(() => {})
+    sendWs({ type: 'GET_SOLUTIONS', taskId })
   }, [])
 
   return (

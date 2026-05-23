@@ -1,27 +1,14 @@
 import type { WsMessage, OrderSignal } from '../lib/types'
 
-const listeners = new Map<string, Set<(data: unknown) => void>>()
-
-export function subscribe(event: string, callback: (data: unknown) => void) {
-  if (!listeners.has(event)) listeners.set(event, new Set())
-  listeners.get(event)!.add(callback)
-  return () => { listeners.get(event)?.delete(callback) }
-}
-
 export function routeMessage(msg: WsMessage) {
   chrome.runtime.sendMessage(msg).catch(() => {})
 
   if (msg.type === 'ORDER_SIGNAL') {
     handleOrderSignal(msg as OrderSignal)
   }
-
-  const subs = listeners.get(msg.type)
-  if (subs) {
-    for (const cb of subs) cb(msg)
-  }
 }
 
-export async function forwardToContentScript(
+async function forwardToContentScript(
   msg: Record<string, unknown>,
   sendResponse: (response: Record<string, unknown>) => void,
 ) {
