@@ -6,7 +6,7 @@ interface StopInfo {
 }
 
 export interface GenStrategy {
-  type: 'direct' | 'split' | 'longer1' | 'longer2'
+  type: 'direct' | 'split' | 'longer1'
   label: string
   fromStation: string
   toStation: string

@@ -1,7 +1,6 @@
 import type { PlasmoCSConfig } from "plasmo"
 import type { Passenger } from "./lib/types"
-import { generateStrategies } from "./content/strategy"
-import { startPolling, stopPolling, queryTrainSchedule, submitOrder, submitWaitlist } from "./content/poller"
+import { startPolling, stopPolling, queryTrainSchedule, queryTickets, submitOrder, submitWaitlist } from "./content/poller"
 import type { GenStrategy } from "./content/strategy"
 import type { PollerConfig } from "./content/poller"
 
@@ -50,31 +49,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === 'START_POLLING') {
-    const cfg = msg.config as PollerConfig
-    startPolling(cfg, (strategy: GenStrategy, ticket) => {
-      // ticket found — auto submit order
-      const today = new Date().toISOString().slice(0, 10)
-      submitOrder(
-        ticket.secretStr, cfg.travelDate, today,
-        strategy.fromStationName, strategy.toStationName,
-        ticket.seatDiscountInfo,
-      ).then(result => {
-        chrome.runtime.sendMessage({
-          type: 'ORDER_RESULT',
-          taskId: cfg.taskId,
-          trainNo: ticket.train_no,
-          ok: result.ok,
-          message: result.message || '',
-        })
-      })
-    })
-    sendResponse({ ack: true })
+    buildAndStart(msg.config, sendResponse)
     return true
   }
 
   if (msg.type === 'STOP_POLLING') {
     stopPolling(msg.taskId)
     sendResponse({ ack: true })
+    return true
+  }
+
+  if (msg.type === 'PREVIEW_STRATEGIES') {
+    previewStrategies(msg.trainNo, msg.fromCode, msg.toCode, msg.fromStationName, msg.toStationName, msg.date)
+      .then(strategies => sendResponse({ strategies }))
+      .catch(e => sendResponse({ error: e.message }))
+    return true
+  }
+
+  if (msg.type === 'QUERY_DETAIL') {
+    getTrainDetail(msg.trainNo, msg.date, msg.fromStationName, msg.toStationName)
+      .then(ticket => sendResponse({ ticket: ticket || null }))
+      .catch(e => sendResponse({ error: e.message }))
     return true
   }
 
@@ -150,4 +145,132 @@ async function fetchStations(): Promise<{ name: string; code: string; pinyin: st
     stations.push({ pinyin: m[1], name: m[2], code: m[3] })
   }
   return stations
+}
+
+async function buildAndStart(rawCfg: any, sendResponse: (r: any) => void) {
+  const { taskId, fromCode, toCode, trainNo, travelDate, seatTypes, passengers, splitTicket, extraOneStop } = rawCfg
+
+  // 1. generate strategies from 12306
+  const strategies: GenStrategy[] = []
+  try {
+    const stops = await queryTrainSchedule(trainNo, fromCode, toCode, travelDate)
+    if (stops.length > 0) {
+      const fromStationName = rawCfg.fromStationName || ''
+      const toStationName = rawCfg.toStationName || ''
+      const stopNames = stops.map((s: any) => s.station_name)
+      const fromIdx = stopNames.indexOf(fromStationName)
+      let toIdx = stopNames.lastIndexOf(toStationName)
+      // fallback: if destination not on this train, use the last stop
+      if (toIdx === -1) toIdx = stops.length - 1
+      console.log('[EasyHome] fromIdx=', fromIdx, 'toIdx=', toIdx, 'stops:', stopNames)
+      if (fromIdx !== -1 && fromIdx < toIdx) {
+        const directPrice = stops[toIdx]?.price || 0
+        strategies.push({ type: 'direct', label: '直达', extraFee: 0, totalPrice: directPrice, fromStation: fromCode, toStation: toCode, fromStationName: rawCfg.fromStationName || '', toStationName: rawCfg.toStationName || '' })
+        if (splitTicket) {
+          for (let mid = fromIdx + 1; mid < toIdx; mid++) {
+            const s = stops[mid] as any
+            const p = s.price || 0
+            const seg1 = p - (stops[fromIdx] as any)?.price || 0
+            const seg2 = directPrice - p
+            strategies.push({ type: 'split', label: `分段: ${stops[mid].station_name}`, extraFee: Math.max(seg1, 0) + Math.max(seg2, 0) - directPrice, totalPrice: Math.max(seg1, 0) + Math.max(seg2, 0), fromStation: fromCode, toStation: s.station_train_code || s.station_name || '', fromStationName: rawCfg.fromStationName || '', toStationName: rawCfg.toStationName || '' })
+          }
+        }
+        if (extraOneStop && toIdx + 1 < stops.length) {
+          const s = stops[toIdx + 1] as any
+          strategies.push({ type: 'longer1', label: `多买一站: ${s.station_name}`, extraFee: Math.max((s.price || 0) - directPrice, 0), totalPrice: s.price || 0, fromStation: fromCode, toStation: s.station_train_code || s.station_name || '', fromStationName: rawCfg.fromStationName || '', toStationName: rawCfg.toStationName || '' })
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[EasyHome] strategy generation failed:', e)
+  }
+
+  console.log('[EasyHome] generated strategies:', strategies.length, strategies.map(s => s.type))
+
+  if (strategies.length === 0) {
+    sendResponse({ ack: false, error: 'no_strategies' })
+    return
+  }
+
+  const cfg: PollerConfig = { taskId, fromCode, toCode, trainNo, travelDate, seatTypes, strategies, passengers }
+
+  chrome.runtime.sendMessage({
+    type: 'SCAN_LOG', taskId, event: 'polling_start',
+    detail: `开始轮询 ${trainNo}，${strategies.length}个策略`,
+  }).catch(() => {})
+
+  startPolling(cfg, (strategy, ticket) => {
+    const today = new Date().toISOString().slice(0, 10)
+    chrome.runtime.sendMessage({
+      type: 'SCAN_LOG', taskId, event: 'ticket_found',
+      detail: `${ticket.trainNo} 有票！正在下单...`,
+    }).catch(() => {})
+    submitOrder(ticket.secretStr, cfg.travelDate, today, strategy.fromStationName, strategy.toStationName, ticket.seatDiscountInfo)
+      .then(result => {
+        chrome.runtime.sendMessage({
+          type: 'ORDER_RESULT', taskId, trainNo: ticket.trainNo,
+          ok: result.ok, message: result.message || '',
+        })
+      })
+  })
+
+  sendResponse({ ack: true })
+}
+
+async function previewStrategies(
+  trainNo: string, fromCode: string, toCode: string,
+  fromStationName: string, toStationName: string, date: string,
+): Promise<any[]> {
+  const stops = await queryTrainSchedule(trainNo, fromCode, toCode, date)
+  if (!stops.length) return []
+
+  const stopNames = stops.map((s: any) => s.station_name)
+  const fromIdx = stopNames.indexOf(fromStationName)
+  let toIdx = stopNames.lastIndexOf(toStationName)
+  if (toIdx === -1) toIdx = stops.length - 1
+  if (fromIdx === -1 || fromIdx >= toIdx) return []
+
+  const directPrice = (stops[toIdx] as any)?.price || 0
+  const result: any[] = []
+
+  // direct
+  result.push({ type: 'direct', label: `${fromStationName}→${toStationName} 直达`, totalPrice: directPrice, extraFee: 0, fromStation: fromCode, toStation: toCode, fromStationName, toStationName })
+
+  // split
+  for (let mid = fromIdx + 1; mid < toIdx; mid++) {
+    const s = stops[mid] as any
+    const p = s.price || 0
+    const seg1 = p - ((stops[fromIdx] as any)?.price || 0)
+    const seg2 = directPrice - p
+    const total = Math.max(seg1, 0) + Math.max(seg2, 0)
+    const extra = total - directPrice
+    result.push({ type: 'split', label: `${fromStationName}→${s.station_name} + ${s.station_name}→${toStationName}`, totalPrice: total, extraFee: Math.max(extra, 0), fromStation: fromCode, toStation: s.station_train_code || s.station_name || '', fromStationName, toStationName })
+  }
+
+  // longer1
+  if (toIdx + 1 < stops.length) {
+    const s = stops[toIdx + 1] as any
+    const price = s.price || 0
+    result.push({ type: 'longer1', label: `多买一站到${s.station_name}（${toStationName}下车）`, totalPrice: price, extraFee: Math.max(price - directPrice, 0), fromStation: fromCode, toStation: s.station_train_code || s.station_name || '', fromStationName, toStationName })
+  }
+
+  return result
+}
+
+async function getTrainDetail(trainNo: string, date: string, fromName: string, toName: string) {
+  // resolve station names -> codes from cache
+  const stations: { name: string; code: string }[] = await (async () => {
+    const cached = await new Promise<{ name: string; code: string }[]>(resolve => {
+      chrome.storage.local.get('easyticket_stations', data => resolve(data.easyticket_stations || []))
+    })
+    if (cached.length > 0) return cached
+    return fetchStations()
+  })()
+
+  const fromCode = stations.find(s => s.name === fromName)?.code || ''
+  const toCode = stations.find(s => s.name === toName)?.code || ''
+  if (!fromCode || !toCode) return null
+
+  const tickets = await queryTickets(fromCode, toCode, date)
+  return tickets.find(t => t.trainNo === trainNo) || null
 }

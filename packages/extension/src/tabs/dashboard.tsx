@@ -2,6 +2,7 @@ import '~style.css'
 import React, { useState, useEffect, useCallback } from 'react'
 import { TaskList } from '../dashboard/task-list'
 import { TaskForm } from '../dashboard/task-form'
+import { StrategyConfirm } from '../dashboard/strategy-confirm'
 import { loadTasks, saveTask, removeTask } from '../lib/storage'
 import type { StoredTask } from '../lib/storage'
 
@@ -19,6 +20,7 @@ export default function Dashboard() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [logs, setLogs] = useState<Array<{ time: string; event: string; detail: string }>>([])
   const [showForm, setShowForm] = useState(false)
+  const [confirmTask, setConfirmTask] = useState<StoredTask | null>(null)
   const [activePanel, setActivePanel] = useState<Panel>('tasks')
   const [loginLoggedIn, setLoginLoggedIn] = useState<boolean | null>(null)
   const [loginToastDismissed, setLoginToastDismissed] = useState(false)
@@ -42,7 +44,15 @@ export default function Dashboard() {
   useEffect(() => {
     const handler = (msg: any) => {
       if (msg.type === 'LOGIN_STATUS') setLoginLoggedIn(msg.loggedIn)
-      if (msg.type === 'TASK_CREATED') refreshTasks()
+      if (msg.type === 'TASK_CREATED') {
+        console.log('[Dashboard] TASK_CREATED received', msg.task?.status, msg.task)
+        refreshTasks()
+        if (msg.task?.status === 'pending') {
+          console.log('[Dashboard] showing StrategyConfirm')
+          setConfirmTask(msg.task as StoredTask)
+        }
+      }
+      if (msg.type === 'TASK_UPDATED') refreshTasks()
       if (msg.type === 'ORDER_RESULT') {
         const status = msg.ok ? 'ordered' : 'scanning'
         loadTasks().then(tasks => {
@@ -104,12 +114,13 @@ export default function Dashboard() {
         <button onClick={() => setShowForm(true)} className="plasmo-px-4 plasmo-py-1.5 plasmo-ml-auto plasmo-bg-primary plasmo-text-black plasmo-rounded-md plasmo-text-sm plasmo-font-medium">+ 新建任务</button>
       </nav>
       <main className="plasmo-flex-1 plasmo-overflow-auto plasmo-p-6">
-        {activePanel === 'tasks' && <TaskList tasks={tasks.map(t => ({ id: t.id, name: t.name, fromStation: t.fromStation, toStation: t.toStation, travelDate: t.travelDate, status: t.status }))} onSelect={id => setSelectedTaskId(id)} selectedId={selectedTaskId} onDelete={handleDeleteTask} />}
+        {activePanel === 'tasks' && <TaskList tasks={tasks.map(t => ({ id: t.id, name: t.name, fromStation: t.fromStation, toStation: t.toStation, travelDate: t.travelDate, status: t.status }))} onSelect={id => setSelectedTaskId(id)} selectedId={selectedTaskId} onDelete={handleDeleteTask} getFullTask={(id) => tasks.find(t => t.id === id)} />}
         {activePanel === 'log' && <div className="plasmo-space-y-1">
           {logs.map((l, i) => <div key={i} className="plasmo-text-sm plasmo-text-text-muted">{l.time} {l.event} {l.detail}</div>)}
         </div>}
       </main>
       {showForm && <TaskForm onClose={() => { setShowForm(false); refreshTasks() }} />}
+      {confirmTask && <StrategyConfirm task={confirmTask} onDone={() => { setConfirmTask(null); refreshTasks() }} />}
     </div>
   )
 }

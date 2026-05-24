@@ -25,69 +25,198 @@ export interface PollerConfig {
   passengers: { id: string; name: string; idType: string; idNumber: string }[]
 }
 
-const timers = new Map<string, ReturnType<typeof setInterval>>()
+const running = new Map<string, boolean>()
 
 export function startPolling(cfg: PollerConfig, onTicket: (strategy: GenStrategy, ticket: ParsedTicket) => void) {
   stopPolling(cfg.taskId)
-  timers.set(cfg.taskId, setInterval(() => poll(cfg, onTicket), 2000))
+  running.set(cfg.taskId, true)
+  pollLoop(cfg, onTicket)
 }
 
 export function stopPolling(taskId: string) {
-  const t = timers.get(taskId)
-  if (t) { clearInterval(t); timers.delete(taskId) }
+  running.set(taskId, false)
 }
 
-interface ParsedTicket {
-  secretStr: string
-  train_no: string
-  from_station: string
-  to_station: string
-  depart_time: string
-  arrive_time: string
-  seatDiscountInfo: string
+export interface ParsedTicket {
+  secretStr: string           // [0] 下单Token
+  buttonText: string           // [1] 预订/候补
+  trainCode: string            // [2] train_no内部编号
+  trainNo: string              // [3] 车次
+  startStationCode: string     // [4] 始发站电报码
+  endStationCode: string       // [5] 终点站电报码
+  fromStationCode: string      // [6] 出发站电报码
+  toStationCode: string        // [7] 到达站电报码
+  departTime: string           // [8] 出发时间
+  arriveTime: string           // [9] 到达时间
+  duration: string             // [10] 历时
+  controlledFlag: string       // [11] 控制标志 Y/N
+  verifyToken: string          // [12] 校验Token
+  travelDate: string           // [13] 乘车日期
+  ctrl1: string                // [14] 内部控制位
+  ctrl2: string                // [15] 内部控制位
+  fromStationSeq: string       // [16] 出发站序号
+  toStationSeq: string         // [17] 到达站序号
+  canChooseSeat: string        // [18] 是否允许选座
+  ctrl3: string                // [19]
+  highSoftSleeper: string      // [20] 高级软卧
+  softSeat: string             // [21] 软座
+  specialSeat: string          // [22] 特等座
+  softSleeper: string          // [23] 软卧/一等卧
+  otherSeat1: string           // [24]
+  otherSeat2: string           // [25]
+  noSeat: string               // [26] 无座
+  ctrl4: string                // [27]
+  hardSleeper: string          // [28] 硬卧/二等卧
+  hardSeat: string             // [29] 硬座
+  secondClass: string          // [30] 二等座
+  firstClass: string           // [31] 一等座
+  businessClass: string        // [32] 商务座
+  sleeperSeat: string          // [33] 动卧
+  seatComboCode: string        // [34] 席别类型组合Code
+  priceCtrl: string            // [35] 票价控制字
+  canChooseSeatCtrl: string    // [36] 是否支持选座控制位
+  canWaitlist: string          // [37] 是否支持候补
+  inventoryId: string          // [38] 内部流水ID
+  ctrl5: string                // [39]
+  seatDetailCtrl: string       // [40] 细分座位控制串
+  regionCtrl: string           // [41] 地区控制
+  waitlistDetail: string       // [42] 候补控制详情
+  stationSeqCombo: string      // [43] 车站代码组合序列
+  saleTime: string             // [44] 起售时间(YYYYMMDDHHmm)
+  saleActiveFlag: string       // [45] 可售状态 Y/N
+
+  // computed
   rawParts: string[]
+  seatDiscountInfo: string
+  seats: Record<string, string>  // 所有席别余票
 }
+
+const SEAT_FIELD_MAP: [string, number][] = [
+  ['高级软卧', 20], ['软座', 21], ['特等座', 22], ['软卧', 23],
+  ['无座', 26], ['硬卧', 28], ['硬座', 29], ['二等座', 30],
+  ['一等座', 31], ['商务座', 32], ['动卧', 33],
+]
 
 function parseRow(raw: string): ParsedTicket | null {
   try {
     const p = raw.split('|')
-    if (p.length < 10) return null
-    const re = /^(\d{5}[A-Z]\d{4}[A-Z]\d{4}[A-Z]\d{4})$/
-    let discount = ''
-    for (let i = p.length - 2; i >= Math.max(35, p.length - 10); i--) {
-      if (re.test(p[i])) { discount = p[i]; break }
+    if (p.length < 46) return null
+
+    const seats: Record<string, string> = {}
+    for (const [name, idx] of SEAT_FIELD_MAP) {
+      const v = p[idx] || ''
+      seats[name] = v || '--'
     }
+
+    const seatDiscountRe = /^(\d{5}[A-Z]\d{4}[A-Z]\d{4}[A-Z]\d{4})$/
+    let discount = ''
+    for (let i = p.length - 2; i >= 35; i--) {
+      if (seatDiscountRe.test(p[i])) { discount = p[i]; break }
+    }
+
     return {
       secretStr: decodeURIComponent(p[0]),
-      train_no: p[3],
-      from_station: p[6],
-      to_station: p[7],
-      depart_time: p[8],
-      arrive_time: p[9],
-      seatDiscountInfo: discount,
+      buttonText: p[1],
+      trainCode: p[2],
+      trainNo: p[3],
+      startStationCode: p[4],
+      endStationCode: p[5],
+      fromStationCode: p[6],
+      toStationCode: p[7],
+      departTime: p[8],
+      arriveTime: p[9],
+      duration: p[10],
+      controlledFlag: p[11],
+      verifyToken: p[12],
+      travelDate: p[13],
+      ctrl1: p[14],
+      ctrl2: p[15],
+      fromStationSeq: p[16],
+      toStationSeq: p[17],
+      canChooseSeat: p[18],
+      ctrl3: p[19],
+      highSoftSleeper: p[20],
+      softSeat: p[21],
+      specialSeat: p[22],
+      softSleeper: p[23],
+      otherSeat1: p[24],
+      otherSeat2: p[25],
+      noSeat: p[26],
+      ctrl4: p[27],
+      hardSleeper: p[28],
+      hardSeat: p[29],
+      secondClass: p[30],
+      firstClass: p[31],
+      businessClass: p[32],
+      sleeperSeat: p[33],
+      seatComboCode: p[34],
+      priceCtrl: p[35],
+      canChooseSeatCtrl: p[36],
+      canWaitlist: p[37],
+      inventoryId: p[38],
+      ctrl5: p[39],
+      seatDetailCtrl: p[40],
+      regionCtrl: p[41],
+      waitlistDetail: p[42],
+      stationSeqCombo: p[43],
+      saleTime: p[44],
+      saleActiveFlag: p[45],
       rawParts: p,
+      seatDiscountInfo: discount,
+      seats,
     }
   } catch {
     return null
   }
 }
 
-async function poll(cfg: PollerConfig, onTicket: (s: GenStrategy, t: ParsedTicket) => void) {
-  for (const strategy of cfg.strategies) {
-    try {
-      const tickets = await queryTickets(strategy.fromStation, strategy.toStation, cfg.travelDate)
-      const match = tickets.find(t =>
-        t.train_no === cfg.trainNo && hasSeat(t, cfg.seatTypes),
-      )
-      if (match) {
-        stopPolling(cfg.taskId)
-        onTicket(strategy, match)
-        return
-      }
-    } catch {
-      // next tick
-    }
+async function pollLoop(cfg: PollerConfig, onTicket: (s: GenStrategy, t: ParsedTicket) => void) {
+  let tick = 0
+  console.log('[EasyHome] pollLoop start, taskId:', cfg.taskId,
+    'train:', cfg.trainNo, 'date:', cfg.travelDate,
+    'strategies:', cfg.strategies.map(s => `${s.type}:${s.fromStation}->${s.toStation}`))
+
+  if (cfg.strategies.length === 0) {
+    console.error('[EasyHome] NO STRATEGIES! Polling cannot start.')
+    running.delete(cfg.taskId)
+    return
   }
+
+  while (running.get(cfg.taskId)) {
+    tick++
+    for (const strategy of cfg.strategies) {
+      if (!running.get(cfg.taskId)) break
+      try {
+        const from = strategy.fromStation
+        const to = strategy.toStation
+        if (!from || !to) {
+          console.error(`[EasyHome] tick ${tick} BAD STRATEGY: from="${from}" to="${to}" type=${strategy.type}`)
+          continue
+        }
+        const tickets = await queryTickets(from, to, cfg.travelDate)
+        const match = tickets.find(t =>
+          t.trainNo === cfg.trainNo && hasSeat(t, cfg.seatTypes),
+        )
+        if (match) {
+          running.set(cfg.taskId, false)
+          console.log('[EasyHome] TICKET FOUND!', match.trainNo, match.seats)
+          onTicket(strategy, match)
+          return
+        }
+      } catch (e) {
+        console.error('[EasyHome] poll error:', e)
+      }
+    }
+
+    if (tick % 5 === 0) {
+      console.log(`[EasyHome] tick ${tick}, no tickets yet`)
+    }
+
+    await new Promise(r => setTimeout(r, 2000))
+  }
+
+  console.log('[EasyHome] pollLoop stop', cfg.taskId)
+  running.delete(cfg.taskId)
 }
 
 export async function queryTickets(
@@ -99,25 +228,22 @@ export async function queryTickets(
     'leftTicketDTO.to_station': toCode,
     'purpose_codes': 'ADULT',
   }
-  const resp = await fetch('https://kyfw.12306.cn/otn/leftTicket/queryZ?' + new URLSearchParams(params), {
+  const resp = await fetch('https://kyfw.12306.cn/otn/leftTicket/queryG?' + new URLSearchParams(params), {
     credentials: 'include',
     headers: { 'Referer': 'https://kyfw.12306.cn/otn/leftTicket/init' },
   })
 
-  if (!resp.ok) { log('queryZ', params, { error: `HTTP ${resp.status}` }); return [] }
+  if (!resp.ok) { log('queryG', params, { error: `HTTP ${resp.status}` }); return [] }
   const data = await resp.json()
   const tickets = (data?.data?.result || []).filter(r => typeof r === 'string').map(parseRow).filter(Boolean) as ParsedTicket[]
-  log('queryZ', params, { count: tickets.length, trains: tickets.map(t => t.train_no) })
+  log('queryG', params, { count: tickets.length, trains: tickets.map(t => t.trainNo) })
   return tickets
 }
 
 function hasSeat(ticket: ParsedTicket, seatTypes: string[]): boolean {
-  const seatMap: Record<string, number> = { '二等座': 30, '一等座': 31, '商务座': 32, '硬卧': 28, '软卧': 23, '硬座': 29, '无座': 26 }
   for (const name of seatTypes) {
-    const idx = seatMap[name]
-    if (idx === undefined) continue
-    const val = ticket.rawParts[idx] || ''
-    if (val && val !== '无' && val !== '' && val !== '*') return true
+    const val = ticket.seats[name]
+    if (val && val !== '无' && val !== '--' && val !== '' && val !== '*') return true
   }
   return false
 }
@@ -125,7 +251,12 @@ function hasSeat(ticket: ParsedTicket, seatTypes: string[]): boolean {
 export async function queryTrainSchedule(
   trainNo: string, fromCode: string, toCode: string, date: string,
 ): Promise<any[]> {
-  const params = { train_no: trainNo, from_station_telecode: fromCode, to_station_telecode: toCode, depart_date: date }
+  // first query tickets to get the coded train_no (e.g. "3b0000G56202")
+  const tickets = await queryTickets(fromCode, toCode, date)
+  const match = tickets.find(t => t.trainNo === trainNo)
+  const codedNo = match?.trainCode || trainNo
+
+  const params = { train_no: codedNo, from_station_telecode: fromCode, to_station_telecode: toCode, depart_date: date }
   const resp = await fetch('https://kyfw.12306.cn/otn/czxx/queryByTrainNo?' + new URLSearchParams(params), {
     credentials: 'include',
     headers: { 'Referer': 'https://kyfw.12306.cn/otn/leftTicket/init' },

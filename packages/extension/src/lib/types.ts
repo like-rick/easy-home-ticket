@@ -21,5 +21,4 @@ export interface TaskConfig {
   passengers: Passenger[]
   splitTicket: boolean
   extraOneStop: boolean
-  extraTwoStop: boolean
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import type { TaskConfig, StationInfo, Passenger } from '../lib/types'
+import type { StationInfo, Passenger } from '../lib/types'
 import { saveTask } from '../lib/storage'
 import type { StoredTask } from '../lib/storage'
 import { StationPicker } from './station-picker'
@@ -14,68 +14,7 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
   const [date, setDate] = useState('')
   const [seatTypes, setSeatTypes] = useState<string[]>(['二等座'])
   const [passengers, setPassengers] = useState<Passenger[]>([])
-  const [splitTicket, setSplitTicket] = useState(false)
-  const [extraOne, setExtraOne] = useState(false)
-  const [extraTwo, setExtraTwo] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
-
-  // strategy cost display
-  const [strategies, setStrategies] = useState<any[]>([])
-  const [loadingStrategies, setLoadingStrategies] = useState(false)
-
-  const queryStrategies = useCallback(async () => {
-    if (!from || !to || !trainNo || !date) return
-    setLoadingStrategies(true)
-    chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' }, (tabs) => {
-      const tab = tabs.find(t => !t.discarded)
-      if (!tab?.id) { setLoadingStrategies(false); return }
-      chrome.tabs.sendMessage(tab.id, {
-        type: 'QUERY_SCHEDULE',
-        trainNo, fromCode: from.code, toCode: to.code, date,
-      }, (response) => {
-        setLoadingStrategies(false)
-        if (chrome.runtime.lastError || !response || response.error) return
-        const stops = response.stops || []
-        if (!stops.length) return
-        // Generate strategies from stops
-        const result: any[] = []
-        const fromIdx = stops.findIndex((s: any) => (s.station_train_code || s.station_name) === from.code)
-        const toIdx = stops.findIndex((s: any) => (s.station_train_code || s.station_name) === to.code)
-        if (fromIdx === -1 || toIdx === -1 || fromIdx >= toIdx) { setStrategies([]); return }
-        const directPrice = stops[toIdx]?.price || 0
-
-        result.push({ type: 'direct', label: `${from.name}→${to.name} 直达`, extraFee: 0, totalPrice: directPrice, fromStation: from.code, toStation: to.code })
-
-        // split options
-        for (let mid = fromIdx + 1; mid < toIdx; mid++) {
-          const s = stops[mid]
-          const p = (s.price || 0)
-          const seg1 = p - (stops[fromIdx]?.price || 0)
-          const seg2 = directPrice - p
-          result.push({
-            type: 'split', label: `${from.name}→${s.station_name} + ${s.station_name}→${to.name}`,
-            extraFee: Math.max(seg1, 0) + Math.max(seg2, 0) - directPrice,
-            totalPrice: Math.max(seg1, 0) + Math.max(seg2, 0),
-            fromStation: from.code, toStation: s.station_train_code || s.station_name,
-          })
-        }
-
-        // longer options
-        if (toIdx + 1 < stops.length) {
-          const s = stops[toIdx + 1]
-          result.push({ type: 'longer1', label: `多买一站到${s.station_name}（${to.name}下车）`, extraFee: Math.max((s.price || 0) - directPrice, 0), totalPrice: s.price || 0, fromStation: from.code, toStation: s.station_train_code || s.station_name })
-        }
-        if (toIdx + 2 < stops.length) {
-          const s = stops[toIdx + 2]
-          result.push({ type: 'longer2', label: `多买两站到${s.station_name}（${to.name}下车）`, extraFee: Math.max((s.price || 0) - directPrice, 0), totalPrice: s.price || 0, fromStation: from.code, toStation: s.station_train_code || s.station_name })
-        }
-
-        setStrategies(result)
-      })
-    })
-  }, [from, to, trainNo, date])
-
-  useEffect(() => { queryStrategies() }, [from, to, trainNo, date])
 
   const toggleArr = (arr: string[], item: string) => arr.includes(item) ? arr.filter(x => x !== item) : [...arr, item]
   const clearField = (f: string) => setErrors(prev => { const n = { ...prev }; delete n[f]; return n })
@@ -87,66 +26,35 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
     if (!trainNo) newErrors.trainNo = '请输入车次'
     if (!date) newErrors.date = '请选择出行日期'
     if (seatTypes.length === 0) newErrors.seatTypes = '请至少选择一种座位类型'
-    if (passengers.length === 0) newErrors.passengers = '请至少选择一位乘车人'
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return }
 
-    const config: TaskConfig = {
-      name: `${trainNo} ${from!.name}→${to!.name}`,
-      fromStation: from!.name, toStation: to!.name,
-      trainNo, travelDate: date, seatTypes,
-      passengers, splitTicket, extraOneStop: extraOne, extraTwoStop: extraTwo,
-    }
-
-    const enabledStrategies = strategies.filter((s: any) =>
-      s.type === 'direct' ||
-      (s.type === 'split' && splitTicket) ||
-      (s.type === 'longer1' && extraOne) ||
-      (s.type === 'longer2' && extraTwo)
-    )
+    const finalPassengers = passengers.length > 0 ? passengers : [
+      { id: 'mock_1', name: '测试用户', idType: '居民身份证', idNumber: '110101199001011234' },
+    ]
 
     const stored: StoredTask = {
       id: Date.now().toString(),
-      ...config,
-      status: 'scanning',
-      strategies: enabledStrategies,
+      name: `${trainNo} ${from!.name}→${to!.name}`,
+      fromStation: from!.name, toStation: to!.name,
+      fromCode: from!.code, toCode: to!.code,
+      trainNo, travelDate: date, seatTypes,
+      passengers: finalPassengers,
+      splitTicket: false, extraOneStop: false,
+      status: 'pending',
+      strategies: [],
       createdAt: Date.now(),
     }
 
     saveTask(stored).then(() => {
       chrome.runtime.sendMessage({ type: 'TASK_CREATED', task: stored }).catch(() => {})
-
-      // start polling
-      chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' }, (tabs) => {
-        const tab = tabs.find(t => !t.discarded)
-        if (!tab?.id) return
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'START_POLLING',
-          config: {
-            taskId: stored.id,
-            fromCode: from!.code,
-            toCode: to!.code,
-            trainNo,
-            travelDate: date,
-            seatTypes,
-            strategies: enabledStrategies,
-            passengers,
-          },
-        })
-      })
-
       onClose()
     })
   }
 
-  const splitText = splitTicket && strategies.filter((s: any) => s.type === 'split')
-  const longer1Text = extraOne && strategies.find((s: any) => s.type === 'longer1')
-  const longer2Text = extraTwo && strategies.find((s: any) => s.type === 'longer2')
-
   return (
     <div className="plasmo-fixed plasmo-inset-0 plasmo-flex plasmo-items-center plasmo-justify-center plasmo-z-50" style={{ backgroundColor: 'rgba(0,0,0,0.53)' }}>
-      <div className="plasmo-bg-canvas plasmo-rounded-xl plasmo-w-[480px] plasmo-max-h-[85vh] plasmo-flex plasmo-flex-col plasmo-border plasmo-border-border">
+      <div className="plasmo-bg-canvas plasmo-rounded-xl plasmo-w-[480px] plasmo-flex plasmo-flex-col plasmo-border plasmo-border-border">
         <h2 className="plasmo-text-lg plasmo-font-semibold plasmo-text-white plasmo-p-6 plasmo-pb-0">新建抢票任务</h2>
-
         <div className="plasmo-overflow-auto plasmo-p-6 plasmo-flex-1">
           <div className="plasmo-grid plasmo-grid-cols-2 plasmo-gap-3">
             <div>
@@ -169,7 +77,6 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
                 className={`plasmo-w-full plasmo-bg-canvas-soft plasmo-border ${errors.date ? 'plasmo-border-red-500' : 'plasmo-border-border'} plasmo-rounded-md plasmo-px-3 plasmo-py-2 plasmo-text-sm plasmo-text-white focus:plasmo-border-primary plasmo-outline-none`} />
             </div>
           </div>
-
           <div className="plasmo-mt-4">
             <label className="plasmo-text-sm plasmo-text-text-muted plasmo-mb-2 plasmo-block"><span className="plasmo-text-red-500">* </span>席别</label>
             <div className="plasmo-flex plasmo-flex-wrap plasmo-gap-2">
@@ -180,47 +87,14 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           </div>
-
           <div className="plasmo-mt-4">
             <label className="plasmo-text-sm plasmo-text-text-muted plasmo-mb-1 plasmo-block"><span className="plasmo-text-red-500">* </span>乘车人</label>
             <PassengerPicker passengers={passengers} onChange={setPassengers} error={errors.passengers} onClearError={() => clearField('passengers')} />
           </div>
-
-          {/* Strategy options */}
-          {strategies.length > 0 && (
-            <div className="plasmo-mt-4 plasmo-space-y-2">
-              <label className="plasmo-text-sm plasmo-text-text-muted plasmo-block">抢票策略</label>
-              {strategies.filter((s: any) => s.type === 'direct').map((s: any) => (
-                <div key="direct" className="plasmo-flex plasmo-items-center plasmo-justify-between plasmo-text-sm plasmo-text-white">
-                  <span>✓ {s.label}</span><span className="plasmo-text-text-muted">¥{s.totalPrice}</span>
-                </div>
-              ))}
-              <label className="plasmo-flex plasmo-items-center plasmo-gap-2 plasmo-cursor-pointer plasmo-text-sm">
-                <input type="checkbox" checked={splitTicket} onChange={e => setSplitTicket(e.target.checked)} />
-                <span className="plasmo-text-white">上车补票</span>
-                {splitText && splitText.length > 0 && (
-                  <span className="plasmo-text-text-muted plasmo-ml-auto">
-                    {splitText.map((s: any) => `+¥${s.extraFee}`).join(' / ')}
-                  </span>
-                )}
-              </label>
-              <label className="plasmo-flex plasmo-items-center plasmo-gap-2 plasmo-cursor-pointer plasmo-text-sm">
-                <input type="checkbox" checked={extraOne} onChange={e => setExtraOne(e.target.checked)} />
-                <span className="plasmo-text-white">多买一站</span>
-                {longer1Text && <span className="plasmo-text-text-muted plasmo-ml-auto">+¥{longer1Text.extraFee}</span>}
-              </label>
-              <label className="plasmo-flex plasmo-items-center plasmo-gap-2 plasmo-cursor-pointer plasmo-text-sm">
-                <input type="checkbox" checked={extraTwo} onChange={e => setExtraTwo(e.target.checked)} />
-                <span className="plasmo-text-white">多买两站</span>
-                {longer2Text && <span className="plasmo-text-text-muted plasmo-ml-auto">+¥{longer2Text.extraFee}</span>}
-              </label>
-            </div>
-          )}
         </div>
-
         <div className="plasmo-flex plasmo-gap-3 plasmo-justify-end plasmo-p-6 plasmo-border-t plasmo-border-border plasmo-shrink-0">
           <button onClick={onClose} className="plasmo-px-5 plasmo-py-2 plasmo-bg-transparent plasmo-border plasmo-border-border plasmo-text-text-muted plasmo-rounded-md plasmo-text-sm">取消</button>
-          <button onClick={handleSubmit} className="plasmo-px-5 plasmo-py-2 plasmo-bg-primary plasmo-text-black plasmo-rounded-md plasmo-text-sm plasmo-font-medium">保存并开始</button>
+          <button onClick={handleSubmit} className="plasmo-px-5 plasmo-py-2 plasmo-bg-primary plasmo-text-black plasmo-rounded-md plasmo-text-sm plasmo-font-medium">下一步</button>
         </div>
       </div>
     </div>

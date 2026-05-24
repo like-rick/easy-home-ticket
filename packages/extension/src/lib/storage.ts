@@ -14,13 +14,15 @@ export interface StoredTask {
   name: string
   fromStation: string
   toStation: string
+  fromCode: string
+  toCode: string
   trainNo: string
   travelDate: string
+  seatTypes: string[]
   passengers: PassengerInfo[]
   splitTicket: boolean
   extraOneStop: boolean
-  extraTwoStop: boolean
-  status: 'not_started' | 'scanning' | 'ordered' | 'waitlisted'
+  status: 'pending' | 'scanning' | 'ordered' | 'waitlisted'
   strategies: StrategyOption[]
   createdAt: number
 }
@@ -33,10 +35,12 @@ export interface PassengerInfo {
 }
 
 export interface StrategyOption {
-  type: 'direct' | 'split' | 'longer1' | 'longer2'
+  type: 'direct' | 'split' | 'longer1'
   label: string
   fromStation: string
   toStation: string
+  fromStationName: string
+  toStationName: string
   extraFee: number
   totalPrice: number
   enabled: boolean
