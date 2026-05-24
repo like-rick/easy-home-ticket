@@ -2,8 +2,15 @@ import '~style.css'
 import React, { useState, useEffect, useCallback } from 'react'
 import { TaskList } from '../dashboard/task-list'
 import { TaskForm } from '../dashboard/task-form'
-import { loadTasks, removeTask } from '../lib/storage'
+import { loadTasks, saveTask, removeTask } from '../lib/storage'
 import type { StoredTask } from '../lib/storage'
+
+function stopPollingForTask(taskId: string) {
+  chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' }, (tabs) => {
+    const tab = tabs.find(t => !t.discarded)
+    if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: 'STOP_POLLING', taskId })
+  })
+}
 
 type Panel = 'tasks' | 'log'
 
@@ -36,6 +43,24 @@ export default function Dashboard() {
     const handler = (msg: any) => {
       if (msg.type === 'LOGIN_STATUS') setLoginLoggedIn(msg.loggedIn)
       if (msg.type === 'TASK_CREATED') refreshTasks()
+      if (msg.type === 'ORDER_RESULT') {
+        const status = msg.ok ? 'ordered' : 'scanning'
+        loadTasks().then(tasks => {
+          const task = tasks.find(t => t.id === msg.taskId)
+          if (task) {
+            task.status = status
+            saveTask(task).then(refreshTasks)
+          }
+        })
+        setLogs(prev => [...prev.slice(-200), {
+          time: new Date().toLocaleTimeString(),
+          event: msg.ok ? '下单成功' : '下单失败',
+          detail: msg.ok ? `${msg.trainNo} 已下单，请付款` : (msg.message || ''),
+        }])
+        if (msg.ok) {
+          stopPollingForTask(msg.taskId)
+        }
+      }
       if (msg.type === 'SCAN_LOG') {
         setLogs(prev => [...prev.slice(-200), { time: new Date().toLocaleTimeString(), event: msg.event || '', detail: msg.detail || '' }])
       }

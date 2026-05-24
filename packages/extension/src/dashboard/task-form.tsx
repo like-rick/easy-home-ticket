@@ -97,21 +97,43 @@ export function TaskForm({ onClose }: { onClose: () => void }) {
       passengers, splitTicket, extraOneStop: extraOne, extraTwoStop: extraTwo,
     }
 
+    const enabledStrategies = strategies.filter((s: any) =>
+      s.type === 'direct' ||
+      (s.type === 'split' && splitTicket) ||
+      (s.type === 'longer1' && extraOne) ||
+      (s.type === 'longer2' && extraTwo)
+    )
+
     const stored: StoredTask = {
       id: Date.now().toString(),
       ...config,
-      status: 'not_started',
-      strategies: strategies.filter((s: any) =>
-        s.type === 'direct' ||
-        (s.type === 'split' && splitTicket) ||
-        (s.type === 'longer1' && extraOne) ||
-        (s.type === 'longer2' && extraTwo)
-      ),
+      status: 'scanning',
+      strategies: enabledStrategies,
       createdAt: Date.now(),
     }
 
     saveTask(stored).then(() => {
       chrome.runtime.sendMessage({ type: 'TASK_CREATED', task: stored }).catch(() => {})
+
+      // start polling
+      chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' }, (tabs) => {
+        const tab = tabs.find(t => !t.discarded)
+        if (!tab?.id) return
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'START_POLLING',
+          config: {
+            taskId: stored.id,
+            fromCode: from!.code,
+            toCode: to!.code,
+            trainNo,
+            travelDate: date,
+            seatTypes,
+            strategies: enabledStrategies,
+            passengers,
+          },
+        })
+      })
+
       onClose()
     })
   }

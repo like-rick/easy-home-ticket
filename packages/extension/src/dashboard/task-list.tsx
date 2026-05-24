@@ -32,8 +32,8 @@ export function TaskList({ tasks, onSelect, selectedId, onDelete }: { tasks: Tas
                 <span
                   className="plasmo-w-1.5 plasmo-h-1.5 plasmo-rounded-full plasmo-flex-shrink-0 plasmo-ml-2"
                   style={{
-                    backgroundColor: t.status === 'active' ? '#3ecf8e' : '#707070',
-                    boxShadow: t.status === 'active' ? '0 0 5px #3ecf8e88' : 'none',
+                    backgroundColor: (t.status === 'active' || t.status === 'scanning') ? '#3ecf8e' : '#707070',
+                    boxShadow: (t.status === 'active' || t.status === 'scanning') ? '0 0 5px #3ecf8e88' : 'none',
                   }}
                 />
               </div>

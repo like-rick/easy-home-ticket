@@ -50,11 +50,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === 'START_POLLING') {
-    startPolling(msg.config as PollerConfig, (strategy: GenStrategy) => {
-      chrome.runtime.sendMessage({
-        type: 'TICKET_FOUND',
-        taskId: msg.config.taskId,
-        strategy,
+    const cfg = msg.config as PollerConfig
+    startPolling(cfg, (strategy: GenStrategy, ticket) => {
+      // ticket found — auto submit order
+      const today = new Date().toISOString().slice(0, 10)
+      submitOrder(
+        ticket.secretStr, cfg.travelDate, today,
+        strategy.fromStationName, strategy.toStationName,
+        ticket.seatDiscountInfo,
+      ).then(result => {
+        chrome.runtime.sendMessage({
+          type: 'ORDER_RESULT',
+          taskId: cfg.taskId,
+          trainNo: ticket.train_no,
+          ok: result.ok,
+          message: result.message || '',
+        })
       })
     })
     sendResponse({ ack: true })
@@ -64,12 +75,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'STOP_POLLING') {
     stopPolling(msg.taskId)
     sendResponse({ ack: true })
-    return true
-  }
-
-  if (msg.type === 'SUBMIT_ORDER') {
-    submitOrder(msg.strategy, msg.passengers, msg.trainNo, msg.travelDate)
-      .then(r => sendResponse(r))
     return true
   }
 
