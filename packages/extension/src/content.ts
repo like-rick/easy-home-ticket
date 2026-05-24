@@ -23,7 +23,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     }).then(r => r.json()).then(d => {
-      loginCache = { loggedIn: !!(d.status || d.httpstatus === 200), ts: Date.now() }
+      const isLogin = (!!(d.status && d.httpstatus === 200)) && d.data?.is_login === 'Y';
+      loginCache = { loggedIn: isLogin, ts: Date.now() }
       sendResponse({ loggedIn: loginCache.loggedIn })
     }).catch(() => sendResponse({ error: 'fetch_failed' }))
     return true
@@ -32,6 +33,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'FETCH_PASSENGERS') {
     fetchPassengers().then(p => sendResponse({ passengers: p }))
       .catch(e => sendResponse({ error: e.message || 'fetch_failed' }))
+    return true
+  }
+
+  if (msg.type === 'FETCH_STATIONS') {
+    fetchStations().then(stations => sendResponse({ stations }))
+      .catch(e => sendResponse({ error: e.message }))
     return true
   }
 
@@ -124,4 +131,18 @@ async function fetchPassengers(): Promise<Passenger[]> {
     gatValidDateEnd: p.gat_valid_date_end || '',
     gatVersion: p.gat_version || '',
   }))
+}
+
+async function fetchStations(): Promise<{ name: string; code: string; pinyin: string }[]> {
+  const resp = await fetch('https://kyfw.12306.cn/otn/resources/js/framework/station_name.js', { credentials: 'include' })
+  if (!resp.ok) throw new Error('fetch_failed')
+  const text = await resp.text()
+  // parse: @pinyin|name|code|full_pinyin|...
+  const re = /@([^|]+)\|([^|]+)\|([A-Z]+)\|([^|]+)\|/g
+  const stations: { name: string; code: string; pinyin: string }[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    stations.push({ pinyin: m[1], name: m[2], code: m[3] })
+  }
+  return stations
 }

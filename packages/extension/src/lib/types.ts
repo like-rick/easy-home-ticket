@@ -17,8 +17,6 @@ export interface TaskConfig {
   toStation: string
   trainNo: string
   travelDate: string
-  timeStart: string
-  timeEnd: string
   seatTypes: string[]
   passengers: Passenger[]
   splitTicket: boolean
