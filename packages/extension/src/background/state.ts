@@ -1,71 +1,54 @@
-import type { WsMessage, OrderSignal } from '../lib/types'
+let lastKnownLoginState: boolean | null = null
+let loginTimer: ReturnType<typeof setInterval> | null = null
+const CHECK_INTERVAL = 3 * 3600_000 // 3 hours
 
-export function routeMessage(msg: WsMessage) {
-  chrome.runtime.sendMessage(msg).catch(() => {})
-
-  if (msg.type === 'ORDER_SIGNAL') {
-    handleOrderSignal(msg as OrderSignal)
-  }
+export function startLoginMonitor() {
+  tick()
+  loginTimer = setInterval(tick, CHECK_INTERVAL)
 }
 
-async function forwardToContentScript(
-  msg: Record<string, unknown>,
-  sendResponse: (response: Record<string, unknown>) => void,
-) {
-  const tabs = await chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' })
-  const tab = tabs.find(t => !t.discarded)
-  if (!tab?.id) {
-    sendResponse({ error: 'no_12306_tab' })
-    return
-  }
-  chrome.tabs.sendMessage(tab.id, msg, (response) => {
-    if (chrome.runtime.lastError) {
-      sendResponse({ error: 'content_script_not_ready' })
+function tick() {
+  chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' }, (tabs) => {
+    const tab = tabs.find(t => !t.discarded)
+    if (!tab?.id) {
+      if (lastKnownLoginState !== false) {
+        lastKnownLoginState = false
+        notifyLoginExpired()
+      }
       return
     }
-    sendResponse(response ?? {})
+    chrome.tabs.sendMessage(tab.id, { type: 'CHECK_LOGIN_STATUS' }, (res) => {
+      if (chrome.runtime.lastError || !res || res.error) return
+      const loggedIn = res.loggedIn === true
+      if (loggedIn !== lastKnownLoginState) {
+        lastKnownLoginState = loggedIn
+        chrome.runtime.sendMessage({ type: 'LOGIN_STATUS', loggedIn }).catch(() => {})
+        if (!loggedIn) notifyLoginExpired()
+      }
+    })
   })
 }
 
-async function handleOrderSignal(signal: OrderSignal) {
-  const tabs = await chrome.tabs.query({ url: 'https://kyfw.12306.cn/*' })
-  const tab = tabs.find(t => !t.discarded)
-  if (tab?.id) {
-    chrome.tabs.sendMessage(tab.id, signal).catch(() => {})
-  } else {
-    chrome.tabs.create({ url: 'https://kyfw.12306.cn/otn/leftTicket/init', active: false }, (newTab) => {
-      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-        if (tabId === newTab.id && info.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener)
-          chrome.tabs.sendMessage(newTab.id!, signal).catch(() => {})
-        }
-      })
-    })
-  }
+function notifyLoginExpired() {
+  fetch('http://localhost:8000/api/send-mail', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to: (process.env as any).NOTIFY_EMAIL || '',
+      subject: '[EasyHome] 12306 登录已过期',
+      html: '<p>12306 登录态已过期，请打开浏览器刷新登录。</p>',
+    }),
+  }).catch(() => {})
 }
 
-let lastKnownLoginState: boolean | null = null
-let loginTimer: ReturnType<typeof setTimeout> | null = null
-
-export function startLoginMonitor() {
-  const scheduleNext = () => {
-    const delay = 6 * 3600_000 // 6 hours
-    loginTimer = setTimeout(tick, delay)
-  }
-
-  const tick = () => {
-    forwardToContentScript({ type: 'CHECK_LOGIN_STATUS' }, (res) => {
-      if (!res || res.error || typeof res.loggedIn !== 'boolean') {
-        scheduleNext()
-        return
-      }
-      if (res.loggedIn !== lastKnownLoginState) {
-        lastKnownLoginState = res.loggedIn
-        chrome.runtime.sendMessage({ type: 'LOGIN_STATUS', loggedIn: res.loggedIn }).catch(() => {})
-      }
-      scheduleNext()
-    })
-  }
-
-  tick()
+export function sendTicketMail(email: string, trainNo: string, from: string, to: string) {
+  fetch('http://localhost:8000/api/send-mail', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to: email,
+      subject: `[EasyHome] 抢票成功 - ${trainNo} ${from}→${to}`,
+      html: `<p>已成功下单 <b>${trainNo}</b> ${from}→${to}，请在 12306 APP 中完成付款。</p>`,
+    }),
+  }).catch(() => {})
 }

@@ -1,5 +1,14 @@
 import React from 'react'
-import type { SolutionData } from '../lib/types'
+interface SolutionData {
+  id: string
+  planType: string
+  trainNo: string
+  segments: { fromStation: string; toStation: string; fromTime: string; toTime: string; seatType: string; price: number }[]
+  totalPrice: number
+  extraFee: number
+  priority: number
+  ticketStatus: string
+}
 
 const STATUS_MAP: Record<string, { label: string; bg: string; text: string }> = {
   pending:  { label: '待定',  bg: 'rgba(112,112,112,0.15)', text: '#9a9a9a' },

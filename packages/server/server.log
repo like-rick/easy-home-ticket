@@ -4,3 +4,81 @@
 2026-05-18 23:21:57  INFO     127.0.0.1:50980 - "WebSocket /ws" [accepted]
 2026-05-18 23:21:57  INFO     WS connected  client=4394133680
 2026-05-18 23:21:57  INFO     connection open
+2026-05-23 12:42:31  INFO     Started server process [76795]
+2026-05-23 12:42:31  INFO     Waiting for application startup.
+2026-05-23 12:42:31  INFO     Cleaned up 1 expired tasks (ids=['acc6d603-4cfe-4ebc-8dba-523fdb86ef2a'])
+2026-05-23 12:42:31  INFO     Application startup complete.
+2026-05-23 12:42:31  INFO     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-05-23 15:01:01  INFO     127.0.0.1:59086 - "WebSocket /ws" [accepted]
+2026-05-23 15:01:01  INFO     WS connected  client=4429633872
+2026-05-23 15:01:01  INFO     connection open
+2026-05-23 15:01:09  INFO     WS disconnected  client=4429633872
+2026-05-23 15:01:09  INFO     connection closed
+2026-05-23 21:59:16  INFO     Shutting down
+2026-05-23 21:59:16  INFO     Waiting for application shutdown.
+2026-05-23 21:59:16  INFO     Application shutdown complete.
+2026-05-23 21:59:16  INFO     Finished server process [76795]
+2026-05-23 21:59:17  INFO     Started server process [78297]
+2026-05-23 21:59:17  INFO     Waiting for application startup.
+2026-05-23 21:59:17  INFO     Application startup complete.
+2026-05-23 21:59:17  INFO     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-05-23 22:00:11  INFO     127.0.0.1:50735 - "WebSocket /ws" [accepted]
+2026-05-23 22:00:11  INFO     WS connected  client=4360424976
+2026-05-23 22:00:11  INFO     connection open
+2026-05-23 22:03:02  INFO     WS disconnected  client=4360424976
+2026-05-23 22:03:02  INFO     connection closed
+2026-05-23 22:03:35  INFO     127.0.0.1:51022 - "WebSocket /ws" [accepted]
+2026-05-23 22:03:35  INFO     WS connected  client=4359730928
+2026-05-23 22:03:35  INFO     connection open
+2026-05-23 22:03:42  INFO     GET_TASKS  client=4359730928
+2026-05-23 22:04:16  INFO     GET_TASKS  client=4359730928
+2026-05-23 22:05:06  INFO     CREATE_TASK  client=4359730928  from=安阳东  to=北京西  date=2026-05-31  passengers=1
+2026-05-23 22:05:06  INFO     HTTP Request: GET https://kyfw.12306.cn/otn/leftTicket/queryZ?leftTicketDTO.train_date=2026-05-31&leftTicketDTO.from_station=ADF&leftTicketDTO.to_station=BXP&purpose_codes=ADULT "HTTP/1.1 302 Moved Temporarily"
+2026-05-23 22:05:06  ERROR    Solution generation failed for task 92e77438-e96a-4c6e-8fd3-e2848c2f4ae4: Redirect response '302 Moved Temporarily' for url 'https://kyfw.12306.cn/otn/leftTicket/queryZ?leftTicketDTO.train_date=2026-05-31&leftTicketDTO.from_station=ADF&leftTicketDTO.to_station=BXP&purpose_codes=ADULT'
+Redirect location: 'https://www.12306.cn/mormhweb/logFiles/error.html'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/302
+2026-05-23 22:05:25  INFO     GET_TASKS  client=4359730928
+2026-05-23 22:37:38  INFO     WS disconnected  client=4359730928
+2026-05-23 22:37:38  INFO     connection closed
+2026-05-23 22:37:38  INFO     127.0.0.1:59439 - "WebSocket /ws" [accepted]
+2026-05-23 22:37:38  INFO     WS connected  client=4361183184
+2026-05-23 22:37:38  INFO     connection open
+2026-05-23 22:38:05  INFO     WS disconnected  client=4361183184
+2026-05-23 22:38:05  INFO     connection closed
+2026-05-23 22:38:05  INFO     127.0.0.1:59560 - "WebSocket /ws" [accepted]
+2026-05-23 22:38:05  INFO     WS connected  client=4360119680
+2026-05-23 22:38:05  INFO     connection open
+2026-05-23 22:38:18  INFO     WS disconnected  client=4360119680
+2026-05-23 22:38:18  INFO     connection closed
+2026-05-23 22:38:18  INFO     127.0.0.1:59616 - "WebSocket /ws" [accepted]
+2026-05-23 22:38:18  INFO     WS connected  client=4361399888
+2026-05-23 22:38:18  INFO     connection open
+2026-05-23 22:38:27  INFO     WS disconnected  client=4361399888
+2026-05-23 22:38:27  INFO     connection closed
+2026-05-23 22:38:27  INFO     127.0.0.1:59656 - "WebSocket /ws" [accepted]
+2026-05-23 22:38:27  INFO     WS connected  client=4361092416
+2026-05-23 22:38:27  INFO     connection open
+2026-05-23 22:38:32  INFO     WS disconnected  client=4361092416
+2026-05-23 22:38:32  INFO     connection closed
+2026-05-23 22:38:32  INFO     127.0.0.1:59676 - "WebSocket /ws" [accepted]
+2026-05-23 22:38:32  INFO     WS connected  client=4360551600
+2026-05-23 22:38:32  INFO     connection open
+2026-05-23 22:40:06  INFO     WS disconnected  client=4360551600
+2026-05-23 22:40:06  INFO     connection closed
+2026-05-23 22:40:06  INFO     127.0.0.1:60068 - "WebSocket /ws" [accepted]
+2026-05-23 22:40:06  INFO     WS connected  client=4359876304
+2026-05-23 22:40:06  INFO     connection open
+2026-05-23 22:40:20  INFO     WS disconnected  client=4359876304
+2026-05-23 22:40:20  INFO     connection closed
+2026-05-23 22:40:20  INFO     Shutting down
+2026-05-23 22:40:20  INFO     Waiting for application shutdown.
+2026-05-23 22:40:20  INFO     Application shutdown complete.
+2026-05-23 22:40:20  INFO     Finished server process [78297]
+2026-05-23 22:40:30  INFO     Started server process [78852]
+2026-05-23 22:40:30  INFO     Waiting for application startup.
+2026-05-23 22:40:30  INFO     Application startup complete.
+2026-05-23 22:40:30  INFO     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-05-24 11:09:31  INFO     Shutting down
+2026-05-24 11:09:31  INFO     Waiting for application shutdown.
+2026-05-24 11:09:31  INFO     Application shutdown complete.
+2026-05-24 11:09:31  INFO     Finished server process [78852]

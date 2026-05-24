@@ -22,6 +22,4 @@ async def get_db() -> AsyncSession:
 
 # Import models so they register with Base.metadata
 import models.task  # noqa: E402
-import models.solution  # noqa: E402
-import models.scan_log  # noqa: E402
 import models.station  # noqa: E402

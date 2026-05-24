@@ -9,7 +9,7 @@ interface TaskItem {
   status: string
 }
 
-export function TaskList({ tasks, onSelect, selectedId }: { tasks: TaskItem[]; onSelect: (id: string) => void; selectedId: string | null }) {
+export function TaskList({ tasks, onSelect, selectedId, onDelete }: { tasks: TaskItem[]; onSelect: (id: string) => void; selectedId: string | null; onDelete?: (id: string) => void }) {
   return (
     <div className="plasmo-flex plasmo-flex-col plasmo-gap-2">
       {tasks.map(t => (
@@ -40,8 +40,9 @@ export function TaskList({ tasks, onSelect, selectedId }: { tasks: TaskItem[]; o
               <div className="plasmo-flex plasmo-items-center plasmo-gap-2 plasmo-mt-1">
                 <span className="plasmo-text-xs plasmo-text-text-muted">{t.travelDate}</span>
                 <span className="plasmo-text-xs" style={{ color: t.status === 'active' ? '#3ecf8e' : '#707070' }}>
-                  {t.status === 'active' ? '监控中' : t.status === 'pending' ? '等待中' : '已完成'}
+                  {t.status === 'active' ? '监控中' : t.status === 'scanning' ? '轮询中' : t.status === 'ordered' ? '已下单' : '等待中'}
                 </span>
+                {onDelete && <button onClick={e => { e.stopPropagation(); onDelete(t.id) }} className="plasmo-ml-auto plasmo-text-xs plasmo-text-red-500 hover:plasmo-text-red-400">删除</button>}
               </div>
             </div>
           </div>

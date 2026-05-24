@@ -1,22 +1,18 @@
 import type { PlasmoCSConfig } from "plasmo"
-import type { OrderSignal, Passenger } from "./lib/types"
-import { executeOrder } from "./content/executor"
+import type { Passenger } from "./lib/types"
+import { generateStrategies } from "./content/strategy"
+import { startPolling, stopPolling, queryTrainSchedule, submitOrder, submitWaitlist } from "./content/poller"
+import type { GenStrategy } from "./content/strategy"
+import type { PollerConfig } from "./content/poller"
 
 export const config: PlasmoCSConfig = {
   matches: ["https://kyfw.12306.cn/*"]
 }
 
 let loginCache: { loggedIn: boolean; ts: number } | null = null
-const LOGIN_CACHE_TTL = 6 * 3600_000 // 6 hours
+const LOGIN_CACHE_TTL = 6 * 3600_000
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.type === 'ORDER_SIGNAL') {
-    executeOrder(msg as OrderSignal).then(result => {
-      chrome.runtime.sendMessage({ type: 'ORDER_RESULT', taskId: msg.taskId, result })
-    })
-    sendResponse({ ack: true })
-    return true
-  }
 
   if (msg.type === 'CHECK_LOGIN_STATUS') {
     if (loginCache && Date.now() - loginCache.ts < LOGIN_CACHE_TTL) {
@@ -24,25 +20,55 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return true
     }
     fetch('https://kyfw.12306.cn/otn/login/conf', {
-      method: 'POST',
-      credentials: 'include',
+      method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    })
-      .then(resp => resp.json())
-      .then(data => {
-        loginCache = { loggedIn: !!(data.status || data.httpstatus === 200), ts: Date.now() }
-        sendResponse({ loggedIn: loginCache.loggedIn })
-      })
-      .catch(() => { sendResponse({ error: 'fetch_failed' }) })
+    }).then(r => r.json()).then(d => {
+      loginCache = { loggedIn: !!(d.status || d.httpstatus === 200), ts: Date.now() }
+      sendResponse({ loggedIn: loginCache.loggedIn })
+    }).catch(() => sendResponse({ error: 'fetch_failed' }))
     return true
   }
 
   if (msg.type === 'FETCH_PASSENGERS') {
-    fetchPassengers().then(passengers => {
-      sendResponse({ passengers })
-    }).catch(err => {
-      sendResponse({ error: err.message || 'fetch_failed' })
+    fetchPassengers().then(p => sendResponse({ passengers: p }))
+      .catch(e => sendResponse({ error: e.message || 'fetch_failed' }))
+    return true
+  }
+
+  if (msg.type === 'QUERY_SCHEDULE') {
+    queryTrainSchedule(msg.trainNo, msg.fromCode, msg.toCode, msg.date)
+      .then(stops => sendResponse({ stops }))
+      .catch(e => sendResponse({ error: e.message }))
+    return true
+  }
+
+  if (msg.type === 'START_POLLING') {
+    startPolling(msg.config as PollerConfig, (strategy: GenStrategy) => {
+      chrome.runtime.sendMessage({
+        type: 'TICKET_FOUND',
+        taskId: msg.config.taskId,
+        strategy,
+      })
     })
+    sendResponse({ ack: true })
+    return true
+  }
+
+  if (msg.type === 'STOP_POLLING') {
+    stopPolling(msg.taskId)
+    sendResponse({ ack: true })
+    return true
+  }
+
+  if (msg.type === 'SUBMIT_ORDER') {
+    submitOrder(msg.strategy, msg.passengers, msg.trainNo, msg.travelDate)
+      .then(r => sendResponse(r))
+    return true
+  }
+
+  if (msg.type === 'SUBMIT_WAITLIST') {
+    submitWaitlist(msg.strategy, msg.passengers, msg.trainNo, msg.travelDate)
+      .then(r => sendResponse(r))
     return true
   }
 })
@@ -50,10 +76,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 async function fetchPassengers(): Promise<Passenger[]> {
   const resp = await fetch('https://kyfw.12306.cn/otn/passengers/query', {
     method: 'POST',
-    body: new URLSearchParams({
-      pageIndex: '1',
-      pageSize: '10',
-    }),
+    body: new URLSearchParams({ pageIndex: '1', pageSize: '10' }),
     credentials: 'include',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   })
@@ -61,12 +84,11 @@ async function fetchPassengers(): Promise<Passenger[]> {
   const data = await resp.json()
   if (!data.status && data.httpstatus !== 200) throw new Error('not_logged_in')
   const list = data.data?.datas || []
-  if (!list.length) return []
   return list.map((p: any) => ({
-    id: p.passenger_id || p.passenger_uuid || p.allEncStr || p.code || '',
-    name: p.passenger_name || p.name || '',
-    idType: p.passenger_id_type_name || p.id_type_name || '成人',
-    idNumber: p.passenger_id_no || p.id_number || '',
+    id: p.passenger_id || p.passenger_uuid || '',
+    name: p.passenger_name || '',
+    idType: p.passenger_id_type_name || '成人',
+    idNumber: p.passenger_id_no || '',
     sexCode: p.sex_code || '',
     sexName: p.sex_name || '',
     bornDate: p.born_date || '',

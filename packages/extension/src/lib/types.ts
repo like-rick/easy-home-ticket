@@ -4,107 +4,24 @@ export interface StationInfo {
   pinyin: string
 }
 
-export interface Segment {
-  fromStation: string
-  toStation: string
-  fromTime: string
-  toTime: string
-  trainNo: string
-  seatType: string
-  price: number
-}
-
 export interface Passenger {
   id: string
   name: string
   idType: string
   idNumber: string
-  sexCode?: string
-  sexName?: string
-  bornDate?: string
-  countryCode?: string
-  idTypeCode?: string
-  passengerType?: string
-  passengerTypeName?: string
-  mobileNo?: string
-  phoneNo?: string
-  email?: string
-  address?: string
-  postalcode?: string
-  firstLetter?: string
-  recordCount?: string
-  isUserSelf?: string
-  totalTimes?: string
-  deleteTime?: string
-  allEncStr?: string
-  isAdult?: string
-  isYongThan10?: string
-  isYongThan14?: string
-  isOldThan60?: string
-  ifReceive?: string
-  isActive?: string
-  isBuyTicket?: string
-  lastTime?: string
-  passengerUuid?: string
-  ifPreferential?: string
-  mobileCode?: string
-  temporaryAge60?: string
-  gatBornDate?: string
-  gatValidDateStart?: string
-  gatValidDateEnd?: string
-  gatVersion?: string
 }
 
 export interface TaskConfig {
   name: string
   fromStation: string
   toStation: string
+  trainNo: string
   travelDate: string
   timeStart: string
   timeEnd: string
-  maxExtraFee: number
   seatTypes: string[]
-  trainNos?: string[]
-  strategies: string[]
   passengers: Passenger[]
+  splitTicket: boolean
+  extraOneStop: boolean
+  extraTwoStop: boolean
 }
-
-export interface SolutionData {
-  id: string
-  planType: 'direct' | 'split' | 'longer' | 'cross'
-  trainNo: string
-  segments: Segment[]
-  totalPrice: number
-  extraFee: number
-  priority: number
-  ticketStatus: 'pending' | 'available' | 'sold' | 'booked'
-}
-
-export interface OrderSignal {
-  type: 'ORDER_SIGNAL'
-  taskId: string
-  planType: string
-  trainNo: string
-  segments: Segment[]
-  passengerIds: string[]
-  deadline: string
-}
-
-export interface TaskItem {
-  id: string
-  name: string
-  fromStation: string
-  toStation: string
-  travelDate: string
-  status: string
-}
-
-export type WsMessage =
-  | { type: 'TASK_SYNCED'; taskId: string; task?: TaskConfig & { id: string; status: string } }
-  | { type: 'TASKS_LIST'; tasks: (TaskConfig & { id: string; status: string })[] }
-  | { type: 'SOLUTION_UPDATE'; taskId: string; solutionId?: string; status?: string; solutions?: SolutionData[]; detail?: Record<string, unknown> }
-  | { type: 'SCAN_LOG'; taskId: string; solutionId: string; event: string; detail: string }
-  | { type: 'ORDER_SIGNAL' } & OrderSignal
-  | { type: 'ALERT'; taskId: string; message: string }
-  | { type: 'ERROR'; message: string }
-  | { type: 'HEARTBEAT' }
